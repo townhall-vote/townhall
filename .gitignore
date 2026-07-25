@@ -38,6 +38,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# Clerk local project data
+.clerk/
+
 # vercel
 .vercel
 
