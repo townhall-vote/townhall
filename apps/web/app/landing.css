@@ -1,0 +1,98 @@
+/* Townhall.vote landing page — scoped design tokens.
+   Scoped under .th-page so this never leaks into the app shell,
+   dashboard, or Clerk's themed components. */
+
+.th-page {
+  --th-paper: #f1efe4;
+  --th-paper-deep: #e8e3d2;
+  --th-paper-card: #e9e4d5;
+  --th-ink: #171d19;
+  --th-ink-soft: #4b5750;
+  --th-ink-faint: #7c8579;
+  --th-verdigris: #3e6c5c;
+  --th-verdigris-deep: #2a4a3f;
+  --th-gold: #a5793a;
+  --th-redline: #a23b2e;
+  --th-rule: #cdc6ac;
+  --th-rule-strong: #b8ae8d;
+
+  background-color: var(--th-paper);
+  color: var(--th-ink);
+}
+
+.th-serif {
+  font-family: var(--font-newsreader), ui-serif, Georgia, serif;
+}
+
+.th-sans {
+  font-family: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+.th-mono {
+  font-family: var(--font-plex-mono), ui-monospace, "SF Mono", monospace;
+}
+
+/* Faint engraved rule texture on the hero paper panel */
+.th-paper-texture {
+  background-image:
+    repeating-linear-gradient(
+      transparent,
+      transparent 27px,
+      color-mix(in oklab, var(--th-ink) 5%, transparent) 28px
+    );
+}
+
+/* Hero markup reveal sequence */
+@keyframes th-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes th-strike-draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.th-anim-line {
+  opacity: 0;
+  animation: th-fade-up 0.6s ease-out forwards;
+}
+
+.th-strike {
+  position: relative;
+  white-space: nowrap;
+}
+
+.th-strike::after {
+  content: "";
+  position: absolute;
+  left: -0.15em;
+  right: -0.15em;
+  top: 52%;
+  height: 1.5px;
+  background: var(--th-redline);
+  transform-origin: left center;
+  transform: scaleX(0);
+  animation: th-strike-draw 0.5s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .th-anim-line {
+    opacity: 1;
+    animation: none;
+  }
+  .th-strike::after {
+    transform: scaleX(1);
+    animation: none;
+  }
+}
