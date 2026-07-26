@@ -1,28 +1,20 @@
-import Anthropic from "@anthropic-ai/sdk"
+import { generateText } from "ai"
 import { NextResponse } from "next/server"
 
 // Ported from Democracy.AI's server.js (ROUTE 3).
 export async function POST(request: Request) {
-  const apiKey = process.env.CLAUDE_API_KEY
-
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "CLAUDE_API_KEY is not configured on the server." },
-      { status: 500 },
-    )
-  }
-
   try {
     const { billText, billTitle } = await request.json()
-    const anthropic = new Anthropic({ apiKey })
 
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-5",
-      max_tokens: 1024,
-      messages: [
-        {
-          role: "user",
-          content: `You are an expert policy analyst who explains federal legislation with transparency, objectivity, and ethical clarity. Your goal is to help citizens understand what bills actually do without political bias.
+    const { text: interpretation } = await generateText({
+      model: "anthropic/claude-sonnet-5",
+      maxOutputTokens: 1024,
+      providerOptions: {
+        gateway: {
+          only: ["bedrock"],
+        },
+      },
+      prompt: `You are an expert policy analyst who explains federal legislation with transparency, objectivity, and ethical clarity. Your goal is to help citizens understand what bills actually do without political bias.
 
 Bill Title: ${billTitle}
 
@@ -41,13 +33,7 @@ Please provide an ethical, transparent analysis:
 5. **Transparency Note** (any important context citizens should know, such as who sponsored it, if it's bipartisan, or if there are competing perspectives)
 
 Be clear, accurate, and balanced. Help citizens make informed decisions.`,
-        },
-      ],
     })
-
-    const firstBlock = message.content[0]
-    const interpretation =
-      firstBlock && firstBlock.type === "text" ? firstBlock.text : ""
 
     return NextResponse.json({ interpretation })
   } catch (error) {
