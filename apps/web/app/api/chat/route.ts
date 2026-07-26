@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk"
+import { generateText } from "ai"
 import { NextResponse } from "next/server"
 
 interface ConversationMessage {
@@ -8,15 +8,6 @@ interface ConversationMessage {
 
 // Ported from Democracy.AI's server.js (ROUTE 4).
 export async function POST(request: Request) {
-  const apiKey = process.env.CLAUDE_API_KEY
-
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "CLAUDE_API_KEY is not configured on the server." },
-      { status: 500 },
-    )
-  }
-
   try {
     const {
       billTitle,
@@ -29,8 +20,6 @@ export async function POST(request: Request) {
       conversationHistory: ConversationMessage[]
     } = await request.json()
 
-    const anthropic = new Anthropic({ apiKey })
-
     const messages = [
       ...conversationHistory.map((msg) => ({
         role: msg.role,
@@ -39,19 +28,21 @@ export async function POST(request: Request) {
       { role: "user" as const, content: userQuestion },
     ]
 
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-5",
-      max_tokens: 1024,
-      system: `You are a helpful policy expert answering questions about federal legislation.
+    const { text: response } = await generateText({
+      model: "anthropic/claude-sonnet-5",
+      maxOutputTokens: 1024,
+      providerOptions: {
+        gateway: {
+          only: ["bedrock"],
+        },
+      },
+      instructions: `You are a helpful policy expert answering questions about federal legislation.
 
 Bill: ${billTitle}
 
 Be concise, clear, and helpful. Focus on explaining the bill accurately and answering the user's specific question.`,
       messages,
     })
-
-    const firstBlock = message.content[0]
-    const response = firstBlock && firstBlock.type === "text" ? firstBlock.text : ""
 
     return NextResponse.json({ response })
   } catch (error) {
