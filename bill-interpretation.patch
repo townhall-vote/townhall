@@ -1,0 +1,1162 @@
+diff --git a/apps/web/.env.example b/apps/web/.env.example
+index 8932c71..8f9f712 100644
+--- a/apps/web/.env.example
++++ b/apps/web/.env.example
+@@ -1,3 +1,9 @@
+ CLERK_PUBLISHABLE_KEY=
+ CLERK_SECRET_KEY=
+ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
++
++# Bill search + AI interpretation (/bills) — ported from Democracy.AI
++# Get a free key at https://api.congress.gov/sign-up/
++CONGRESS_API_KEY=
++# Anthropic API key, used for plain-language interpretation and follow-up chat
++CLAUDE_API_KEY=
+diff --git a/apps/web/app/api/bill/[congress]/[billType]/[billNumber]/route.ts b/apps/web/app/api/bill/[congress]/[billType]/[billNumber]/route.ts
+new file mode 100644
+index 0000000..b65f564
+--- /dev/null
++++ b/apps/web/app/api/bill/[congress]/[billType]/[billNumber]/route.ts
+@@ -0,0 +1,93 @@
++import { NextResponse } from "next/server"
++
++interface RouteParams {
++  params: Promise<{
++    congress: string
++    billType: string
++    billNumber: string
++  }>
++}
++
++interface CongressTextFormat {
++  type: string
++  url: string
++}
++
++interface CongressTextVersion {
++  type: string
++  date: string
++  formats: CongressTextFormat[]
++}
++
++// Ported from Democracy.AI's server.js (ROUTE 2).
++// Fetches bill details, then layers on the latest summary and full-text
++// links from Congress.gov's separate endpoints for those.
++export async function GET(_request: Request, { params }: RouteParams) {
++  const { congress, billType, billNumber } = await params
++  const apiKey = process.env.CONGRESS_API_KEY
++
++  if (!apiKey) {
++    return NextResponse.json(
++      { error: "CONGRESS_API_KEY is not configured on the server." },
++      { status: 500 },
++    )
++  }
++
++  try {
++    const billResponse = await fetch(
++      `https://api.congress.gov/v3/bill/${congress}/${billType}/${billNumber}?api_key=${apiKey}&format=json`,
++    )
++
++    if (!billResponse.ok) {
++      throw new Error(`Congress.gov responded with ${billResponse.status}`)
++    }
++
++    const billJson = await billResponse.json()
++    // eslint-disable-next-line @typescript-eslint/no-explicit-any
++    const billData: any = billJson.bill
++
++    try {
++      const summaryResponse = await fetch(
++        `https://api.congress.gov/v3/bill/${congress}/${billType}/${billNumber}/summaries?api_key=${apiKey}&format=json`,
++      )
++
++      if (summaryResponse.ok) {
++        const summaryJson = await summaryResponse.json()
++        if (summaryJson.summaries && summaryJson.summaries.length > 0) {
++          billData.summary = { text: summaryJson.summaries[0].text }
++        }
++      }
++    } catch (summaryError) {
++      console.log("No summary available for this bill", summaryError)
++    }
++
++    try {
++      const textResponse = await fetch(
++        `https://api.congress.gov/v3/bill/${congress}/${billType}/${billNumber}/text?api_key=${apiKey}&format=json`,
++      )
++
++      if (textResponse.ok) {
++        const textJson = await textResponse.json()
++        const versions: CongressTextVersion[] = textJson.textVersions ?? []
++        const latestText = versions[0]
++        if (latestText) {
++          billData.text = {
++            version: latestText.type,
++            date: latestText.date,
++            formats: latestText.formats,
++          }
++        }
++      }
++    } catch (textError) {
++      console.log("No text available for this bill", textError)
++    }
++
++    return NextResponse.json({ bill: billData })
++  } catch (error) {
++    console.error("Error fetching bill details:", error)
++    return NextResponse.json(
++      { error: "Failed to fetch bill details" },
++      { status: 500 },
++    )
++  }
++}
+diff --git a/apps/web/app/api/bills/route.ts b/apps/web/app/api/bills/route.ts
+new file mode 100644
+index 0000000..9732529
+--- /dev/null
++++ b/apps/web/app/api/bills/route.ts
+@@ -0,0 +1,34 @@
++import { NextResponse } from "next/server"
++
++// Ported from Democracy.AI's server.js (ROUTE 1).
++// Pulls recent bills sorted by most recently updated. The Congress.gov
++// API key stays server-side here instead of living in client JS.
++export async function GET() {
++  const apiKey = process.env.CONGRESS_API_KEY
++
++  if (!apiKey) {
++    return NextResponse.json(
++      { error: "CONGRESS_API_KEY is not configured on the server." },
++      { status: 500 },
++    )
++  }
++
++  try {
++    const response = await fetch(
++      `https://api.congress.gov/v3/bill?api_key=${apiKey}&limit=250&format=json&sort=updateDate+desc`,
++    )
++
++    if (!response.ok) {
++      throw new Error(`Congress.gov responded with ${response.status}`)
++    }
++
++    const data = await response.json()
++    return NextResponse.json(data)
++  } catch (error) {
++    console.error("Error fetching bills:", error)
++    return NextResponse.json(
++      { error: "Failed to fetch bills" },
++      { status: 500 },
++    )
++  }
++}
+diff --git a/apps/web/app/api/chat/route.ts b/apps/web/app/api/chat/route.ts
+new file mode 100644
+index 0000000..39d1cdd
+--- /dev/null
++++ b/apps/web/app/api/chat/route.ts
+@@ -0,0 +1,67 @@
++import Anthropic from "@anthropic-ai/sdk"
++import { NextResponse } from "next/server"
++
++interface ConversationMessage {
++  role: "user" | "assistant"
++  content: string
++}
++
++// Ported from Democracy.AI's server.js (ROUTE 4).
++export async function POST(request: Request) {
++  const apiKey = process.env.CLAUDE_API_KEY
++
++  if (!apiKey) {
++    return NextResponse.json(
++      { error: "CLAUDE_API_KEY is not configured on the server." },
++      { status: 500 },
++    )
++  }
++
++  try {
++    const {
++      billTitle,
++      userQuestion,
++      conversationHistory = [],
++    }: {
++      billTitle: string
++      billText: string
++      userQuestion: string
++      conversationHistory: ConversationMessage[]
++    } = await request.json()
++
++    const anthropic = new Anthropic({ apiKey })
++
++    const messages = [
++      ...conversationHistory.map((msg) => ({
++        role: msg.role,
++        content: msg.content,
++      })),
++      { role: "user" as const, content: userQuestion },
++    ]
++
++    const message = await anthropic.messages.create({
++      model: "claude-sonnet-5",
++      max_tokens: 1024,
++      system: `You are a helpful policy expert answering questions about federal legislation.
++
++Bill: ${billTitle}
++
++Be concise, clear, and helpful. Focus on explaining the bill accurately and answering the user's specific question.`,
++      messages,
++    })
++
++    const firstBlock = message.content[0]
++    const response = firstBlock && firstBlock.type === "text" ? firstBlock.text : ""
++
++    return NextResponse.json({ response })
++  } catch (error) {
++    console.error("Error in chat:", error)
++    return NextResponse.json(
++      {
++        error: "Failed to process question. Please try again.",
++        details: error instanceof Error ? error.message : String(error),
++      },
++      { status: 500 },
++    )
++  }
++}
+diff --git a/apps/web/app/api/interpret/route.ts b/apps/web/app/api/interpret/route.ts
+new file mode 100644
+index 0000000..525008b
+--- /dev/null
++++ b/apps/web/app/api/interpret/route.ts
+@@ -0,0 +1,63 @@
++import Anthropic from "@anthropic-ai/sdk"
++import { NextResponse } from "next/server"
++
++// Ported from Democracy.AI's server.js (ROUTE 3).
++export async function POST(request: Request) {
++  const apiKey = process.env.CLAUDE_API_KEY
++
++  if (!apiKey) {
++    return NextResponse.json(
++      { error: "CLAUDE_API_KEY is not configured on the server." },
++      { status: 500 },
++    )
++  }
++
++  try {
++    const { billText, billTitle } = await request.json()
++    const anthropic = new Anthropic({ apiKey })
++
++    const message = await anthropic.messages.create({
++      model: "claude-sonnet-5",
++      max_tokens: 1024,
++      messages: [
++        {
++          role: "user",
++          content: `You are an expert policy analyst who explains federal legislation with transparency, objectivity, and ethical clarity. Your goal is to help citizens understand what bills actually do without political bias.
++
++Bill Title: ${billTitle}
++
++Bill Text: ${billText}
++
++Please provide an ethical, transparent analysis:
++
++1. **Plain Language Summary** (2-3 sentences explaining what this bill does in simple terms)
++
++2. **Who This Affects** (specific groups of people, industries, or communities impacted)
++
++3. **Key Provisions** (the main things this bill would change or create)
++
++4. **Potential Impacts** (both intended benefits and possible concerns, presented objectively)
++
++5. **Transparency Note** (any important context citizens should know, such as who sponsored it, if it's bipartisan, or if there are competing perspectives)
++
++Be clear, accurate, and balanced. Help citizens make informed decisions.`,
++        },
++      ],
++    })
++
++    const firstBlock = message.content[0]
++    const interpretation =
++      firstBlock && firstBlock.type === "text" ? firstBlock.text : ""
++
++    return NextResponse.json({ interpretation })
++  } catch (error) {
++    console.error("Error interpreting bill:", error)
++    return NextResponse.json(
++      {
++        error: "Failed to interpret bill. Please try again.",
++        details: error instanceof Error ? error.message : String(error),
++      },
++      { status: 500 },
++    )
++  }
++}
+diff --git a/apps/web/app/bills/page.tsx b/apps/web/app/bills/page.tsx
+new file mode 100644
+index 0000000..c8eac4d
+--- /dev/null
++++ b/apps/web/app/bills/page.tsx
+@@ -0,0 +1,638 @@
++"use client"
++
++import { useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
++import Link from "next/link"
++import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs"
++import {
++  ArrowLeft,
++  ExternalLink,
++  FileText,
++  Loader2,
++  Search,
++  Send,
++  Sparkles,
++} from "lucide-react"
++
++import "../theme.css"
++import { themeFontVariables } from "../fonts"
++
++interface LatestAction {
++  actionDate?: string
++  text?: string
++}
++
++interface BillSummary {
++  text?: string
++}
++
++interface BillTextFormat {
++  type: string
++  url: string
++}
++
++interface BillListItem {
++  congress: number
++  type: string
++  number: string
++  title?: string
++  latestAction?: LatestAction
++  updateDate?: string
++}
++
++interface BillDetail extends BillListItem {
++  introducedDate?: string
++  sponsors?: unknown[]
++  summary?: BillSummary
++  text?: {
++    version: string
++    date: string
++    formats: BillTextFormat[]
++  }
++}
++
++interface ChatMessage {
++  id: string
++  role: "user" | "assistant"
++  content: string
++}
++
++type View = "list" | "detail"
++
++export default function BillsPage() {
++  const [bills, setBills] = useState<BillListItem[]>([])
++  const [billsLoading, setBillsLoading] = useState(false)
++  const [billsError, setBillsError] = useState<string | null>(null)
++  const [hasLoaded, setHasLoaded] = useState(false)
++
++  const [searchTerm, setSearchTerm] = useState("")
++  const [view, setView] = useState<View>("list")
++
++  const [billDetail, setBillDetail] = useState<BillDetail | null>(null)
++  const [detailLoading, setDetailLoading] = useState(false)
++  const [detailError, setDetailError] = useState<string | null>(null)
++
++  const [interpretation, setInterpretation] = useState<string | null>(null)
++  const [interpreting, setInterpreting] = useState(false)
++  const [interpretError, setInterpretError] = useState<string | null>(null)
++
++  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
++  const [chatInput, setChatInput] = useState("")
++  const [chatSending, setChatSending] = useState(false)
++  const conversationHistory = useRef<{ role: "user" | "assistant"; content: string }[]>([])
++
++  async function loadBills() {
++    setBillsLoading(true)
++    setBillsError(null)
++    try {
++      const response = await fetch("/api/bills")
++      const data = await response.json()
++      if (!response.ok) {
++        throw new Error(data.error ?? "Failed to fetch bills")
++      }
++      setBills(data.bills ?? [])
++    } catch (error) {
++      console.error("Error loading bills:", error)
++      setBillsError("Couldn't load bills. Please try again.")
++    } finally {
++      setBillsLoading(false)
++      setHasLoaded(true)
++    }
++  }
++
++  const filteredBills = useMemo(() => {
++    const term = searchTerm.toLowerCase().trim()
++    if (term.length === 0) return bills
++    return bills.filter((bill) => {
++      const number = bill.number?.toLowerCase() ?? ""
++      const title = (bill.title ?? "").toLowerCase()
++      return number.includes(term) || title.includes(term)
++    })
++  }, [bills, searchTerm])
++
++  async function openBill(bill: BillListItem) {
++    setView("detail")
++    setBillDetail(null)
++    setDetailError(null)
++    setInterpretation(null)
++    setInterpretError(null)
++    setChatMessages([])
++    conversationHistory.current = []
++    setDetailLoading(true)
++
++    const congress = bill.congress
++    const type = bill.type?.toLowerCase()
++    const number = bill.number?.replace(/\D/g, "")
++
++    try {
++      const response = await fetch(`/api/bill/${congress}/${type}/${number}`)
++      const data = await response.json()
++      if (!response.ok) {
++        throw new Error(data.error ?? "Failed to fetch bill details")
++      }
++      setBillDetail({ ...bill, ...data.bill })
++    } catch (error) {
++      console.error("Error loading bill details:", error)
++      setDetailError("Couldn't load this bill's details. Please try again.")
++    } finally {
++      setDetailLoading(false)
++    }
++  }
++
++  function backToList() {
++    setView("list")
++  }
++
++  async function interpretBill() {
++    if (!billDetail) return
++    setInterpreting(true)
++    setInterpretError(null)
++    try {
++      const billContent = billDetail.summary?.text || billDetail.title || "No text available"
++      const response = await fetch("/api/interpret", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({
++          billTitle: billDetail.title || "Untitled Bill",
++          billText: billContent,
++        }),
++      })
++      const data = await response.json()
++      if (!response.ok) {
++        throw new Error(data.error ?? "Failed to interpret bill")
++      }
++      setInterpretation(data.interpretation)
++    } catch (error) {
++      console.error("Error getting AI interpretation:", error)
++      setInterpretError("Couldn't get an AI interpretation. Please try again.")
++    } finally {
++      setInterpreting(false)
++    }
++  }
++
++  async function sendChatMessage() {
++    const userMessage = chatInput.trim()
++    if (!userMessage || !billDetail) return
++
++    setChatSending(true)
++    setChatInput("")
++    setChatMessages((prev) => [
++      ...prev,
++      { id: crypto.randomUUID(), role: "user", content: userMessage },
++    ])
++
++    try {
++      const response = await fetch("/api/chat", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({
++          billTitle: billDetail.title || "Untitled Bill",
++          billText: billDetail.summary?.text || billDetail.title || "No text available",
++          userQuestion: userMessage,
++          conversationHistory: conversationHistory.current,
++        }),
++      })
++      const data = await response.json()
++      if (!response.ok) {
++        throw new Error(data.error ?? "Failed to process question")
++      }
++
++      setChatMessages((prev) => [
++        ...prev,
++        { id: crypto.randomUUID(), role: "assistant", content: data.response },
++      ])
++      conversationHistory.current.push(
++        { role: "user", content: userMessage },
++        { role: "assistant", content: data.response },
++      )
++    } catch (error) {
++      console.error("Error sending message:", error)
++      setChatMessages((prev) => [
++        ...prev,
++        {
++          id: crypto.randomUUID(),
++          role: "assistant",
++          content: "Sorry — I couldn't process that question. Please try again.",
++        },
++      ])
++    } finally {
++      setChatSending(false)
++    }
++  }
++
++  function handleChatKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
++    if (event.key === "Enter" && !event.shiftKey) {
++      event.preventDefault()
++      sendChatMessage()
++    }
++  }
++
++  function handleSearchSubmit(event: FormEvent) {
++    event.preventDefault()
++    if (!hasLoaded) loadBills()
++  }
++
++  if (!hasLoaded && !billsLoading && bills.length === 0) {
++    // Kick off the initial load once, on first render.
++    loadBills()
++  }
++
++  return (
++    <div className={`th-page th-sans min-h-screen ${themeFontVariables}`}>
++      {/* Header */}
++      <header className="sticky top-0 z-40 border-b border-[var(--th-rule)] bg-[var(--th-paper)]/90 backdrop-blur">
++        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
++          <Link href="/" className="flex items-baseline gap-1.5">
++            <span className="th-serif text-xl font-medium tracking-tight text-[var(--th-ink)]">
++              Townhall
++            </span>
++            <span className="th-mono text-xs text-[var(--th-verdigris)]">.vote</span>
++          </Link>
++          <div className="flex items-center gap-3">
++            <Show when="signed-out">
++              <SignInButton>
++                <button className="th-mono rounded-sm px-3 py-2 text-xs tracking-wide text-[var(--th-ink-soft)] uppercase transition-colors hover:text-[var(--th-ink)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris)] focus-visible:outline-none">
++                  Sign in
++                </button>
++              </SignInButton>
++              <SignUpButton>
++                <button className="th-mono rounded-sm bg-[var(--th-verdigris)] px-4 py-2 text-xs tracking-wide text-[var(--th-paper)] uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris)] focus-visible:ring-offset-2 focus-visible:outline-none">
++                  Get early access
++                </button>
++              </SignUpButton>
++            </Show>
++            <Show when="signed-in">
++              <UserButton />
++            </Show>
++          </div>
++        </div>
++      </header>
++
++      <main className="mx-auto max-w-5xl px-6 py-12">
++        {view === "list" ? (
++          <BillsList
++            bills={filteredBills}
++            loading={billsLoading}
++            error={billsError}
++            searchTerm={searchTerm}
++            onSearchChange={setSearchTerm}
++            onSearchSubmit={handleSearchSubmit}
++            onSelect={openBill}
++            onRefresh={loadBills}
++          />
++        ) : (
++          <BillDetailView
++            bill={billDetail}
++            loading={detailLoading}
++            error={detailError}
++            interpretation={interpretation}
++            interpreting={interpreting}
++            interpretError={interpretError}
++            onInterpret={interpretBill}
++            onBack={backToList}
++            chatMessages={chatMessages}
++            chatInput={chatInput}
++            chatSending={chatSending}
++            onChatInputChange={setChatInput}
++            onChatKeyDown={handleChatKeyDown}
++            onSendChat={sendChatMessage}
++          />
++        )}
++      </main>
++    </div>
++  )
++}
++
++function BillsList({
++  bills,
++  loading,
++  error,
++  searchTerm,
++  onSearchChange,
++  onSearchSubmit,
++  onSelect,
++  onRefresh,
++}: {
++  bills: BillListItem[]
++  loading: boolean
++  error: string | null
++  searchTerm: string
++  onSearchChange: (value: string) => void
++  onSearchSubmit: (event: FormEvent) => void
++  onSelect: (bill: BillListItem) => void
++  onRefresh: () => void
++}) {
++  return (
++    <div>
++      <p className="th-mono mb-2 text-[0.7rem] tracking-[0.2em] text-[var(--th-gold)] uppercase">
++        Sec. 3(a) &middot; Bills
++      </p>
++      <h1 className="th-serif text-3xl text-[var(--th-ink)] md:text-4xl">
++        Search recent legislation
++      </h1>
++      <p className="mt-3 max-w-xl text-sm leading-relaxed text-[var(--th-ink-soft)] md:text-base">
++        Browse recently updated bills, or search by number or title. Open one
++        to read a plain-language interpretation and ask follow-up questions.
++      </p>
++
++      <form onSubmit={onSearchSubmit} className="mt-8 flex items-center gap-3">
++        <div className="relative flex-1">
++          <Search
++            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--th-ink-faint)]"
++            aria-hidden
++          />
++          <input
++            type="text"
++            value={searchTerm}
++            onChange={(event) => onSearchChange(event.target.value)}
++            placeholder="Search by bill number or title…"
++            className="th-sans w-full rounded-sm border border-[var(--th-rule-strong)] bg-[var(--th-paper)] py-3 pr-4 pl-10 text-sm text-[var(--th-ink)] placeholder:text-[var(--th-ink-faint)] focus:border-[var(--th-verdigris)] focus:outline-none"
++          />
++        </div>
++        <button
++          type="button"
++          onClick={onRefresh}
++          disabled={loading}
++          className="th-mono rounded-sm border border-[var(--th-rule-strong)] px-4 py-3 text-xs tracking-wide text-[var(--th-ink)] uppercase transition-colors hover:border-[var(--th-ink)] disabled:opacity-50"
++        >
++          {loading ? "Loading…" : "Refresh"}
++        </button>
++      </form>
++
++      <div className="th-mono mt-8 mb-3 text-[0.65rem] tracking-widest text-[var(--th-ink-faint)] uppercase">
++        {loading
++          ? "Loading bills…"
++          : `${bills.length} bill${bills.length === 1 ? "" : "s"}`}
++      </div>
++
++      {error && (
++        <p className="rounded-sm border border-[var(--th-redline)]/30 bg-[var(--th-redline)]/5 p-4 text-sm text-[var(--th-redline)]">
++          {error}
++        </p>
++      )}
++
++      {loading && bills.length === 0 && (
++        <div className="flex items-center gap-2 py-12 text-sm text-[var(--th-ink-faint)]">
++          <Loader2 className="size-4 animate-spin" aria-hidden />
++          Fetching the latest bills from Congress.gov…
++        </div>
++      )}
++
++      {!loading && !error && bills.length === 0 && (
++        <p className="py-12 text-sm text-[var(--th-ink-faint)]">
++          No bills found. Try a different search, or refresh.
++        </p>
++      )}
++
++      <ul className="divide-y divide-[var(--th-rule)] border-y border-[var(--th-rule)]">
++        {bills.map((bill) => (
++          <li key={`${bill.congress}-${bill.type}-${bill.number}`}>
++            <button
++              onClick={() => onSelect(bill)}
++              className="grid w-full grid-cols-1 gap-1 py-5 text-left transition-colors hover:bg-[var(--th-paper-card)]/60 sm:grid-cols-[8rem_1fr_9rem] sm:items-center sm:gap-4 sm:px-2"
++            >
++              <span className="th-mono text-sm text-[var(--th-verdigris)]">
++                {bill.type} {bill.number}
++              </span>
++              <span className="th-serif text-base text-[var(--th-ink)]">
++                {bill.title || "No title available"}
++              </span>
++              <span className="th-mono text-[0.7rem] text-[var(--th-ink-faint)]">
++                {bill.latestAction?.actionDate || "Unknown date"}
++              </span>
++            </button>
++          </li>
++        ))}
++      </ul>
++    </div>
++  )
++}
++
++function BillDetailView({
++  bill,
++  loading,
++  error,
++  interpretation,
++  interpreting,
++  interpretError,
++  onInterpret,
++  onBack,
++  chatMessages,
++  chatInput,
++  chatSending,
++  onChatInputChange,
++  onChatKeyDown,
++  onSendChat,
++}: {
++  bill: BillDetail | null
++  loading: boolean
++  error: string | null
++  interpretation: string | null
++  interpreting: boolean
++  interpretError: string | null
++  onInterpret: () => void
++  onBack: () => void
++  chatMessages: ChatMessage[]
++  chatInput: string
++  chatSending: boolean
++  onChatInputChange: (value: string) => void
++  onChatKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void
++  onSendChat: () => void
++}) {
++  return (
++    <div>
++      <button
++        onClick={onBack}
++        className="th-mono mb-8 inline-flex items-center gap-2 text-xs tracking-wide text-[var(--th-ink-soft)] uppercase hover:text-[var(--th-ink)]"
++      >
++        <ArrowLeft className="size-3.5" aria-hidden />
++        Back to all bills
++      </button>
++
++      {loading && (
++        <div className="flex items-center gap-2 py-12 text-sm text-[var(--th-ink-faint)]">
++          <Loader2 className="size-4 animate-spin" aria-hidden />
++          Loading bill details…
++        </div>
++      )}
++
++      {error && (
++        <p className="rounded-sm border border-[var(--th-redline)]/30 bg-[var(--th-redline)]/5 p-4 text-sm text-[var(--th-redline)]">
++          {error}
++        </p>
++      )}
++
++      {bill && !loading && (
++        <>
++          <p className="th-mono mb-2 text-[0.7rem] tracking-[0.2em] text-[var(--th-gold)] uppercase">
++            {bill.type} {bill.number}
++          </p>
++          <h1 className="th-serif text-2xl leading-snug text-[var(--th-ink)] md:text-3xl">
++            {bill.title || "No title"}
++          </h1>
++
++          <dl className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
++            <div>
++              <dt className="th-mono text-[0.65rem] tracking-widest text-[var(--th-ink-faint)] uppercase">
++                Introduced
++              </dt>
++              <dd className="mt-1 text-[var(--th-ink-soft)]">
++                {bill.introducedDate || "Unknown"}
++              </dd>
++            </div>
++            <div>
++              <dt className="th-mono text-[0.65rem] tracking-widest text-[var(--th-ink-faint)] uppercase">
++                Latest action
++              </dt>
++              <dd className="mt-1 text-[var(--th-ink-soft)]">
++                {bill.latestAction?.text || "No recent action"}
++                {bill.latestAction?.actionDate ? ` (${bill.latestAction.actionDate})` : ""}
++              </dd>
++            </div>
++            <div>
++              <dt className="th-mono text-[0.65rem] tracking-widest text-[var(--th-ink-faint)] uppercase">
++                Sponsors
++              </dt>
++              <dd className="mt-1 text-[var(--th-ink-soft)]">
++                {bill.sponsors?.length ?? 0} sponsor(s)
++              </dd>
++            </div>
++          </dl>
++
++          <div className="mt-6">
++            <p className="th-mono mb-2 text-[0.65rem] tracking-widest text-[var(--th-ink-faint)] uppercase">
++              Summary
++            </p>
++            <p className="text-sm leading-relaxed text-[var(--th-ink-soft)]">
++              {bill.summary?.text ||
++                "No summary available yet. This bill may be too recent to have a summary."}
++            </p>
++          </div>
++
++          {bill.text?.formats && bill.text.formats.length > 0 && (
++            <div className="th-paper-texture mt-6 rounded-sm border border-[var(--th-rule)] bg-[var(--th-paper-card)] p-5">
++              <p className="th-mono mb-3 flex items-center gap-2 text-[0.65rem] tracking-widest text-[var(--th-ink-faint)] uppercase">
++                <FileText className="size-3.5" aria-hidden />
++                Full bill text
++              </p>
++              <div className="flex flex-wrap gap-2">
++                {bill.text.formats.map((format) => (
++                  <a
++                    key={format.url}
++                    href={format.url}
++                    target="_blank"
++                    rel="noreferrer"
++                    className="th-mono inline-flex items-center gap-1.5 rounded-sm bg-[var(--th-verdigris)] px-3 py-2 text-[0.7rem] tracking-wide text-[var(--th-paper)] uppercase transition-colors hover:bg-[var(--th-verdigris-deep)]"
++                  >
++                    {format.type}
++                    <ExternalLink className="size-3" aria-hidden />
++                  </a>
++                ))}
++              </div>
++              <p className="th-mono mt-3 text-[0.65rem] text-[var(--th-ink-faint)]">
++                Opens on Congress.gov
++              </p>
++            </div>
++          )}
++
++          {/* AI interpretation */}
++          <div className="mt-10 border-t border-[var(--th-rule)] pt-8">
++            <div className="flex items-center justify-between gap-4">
++              <p className="th-mono text-[0.7rem] tracking-[0.2em] text-[var(--th-ink-faint)] uppercase">
++                AI interpretation
++              </p>
++              {!interpretation && (
++                <button
++                  onClick={onInterpret}
++                  disabled={interpreting}
++                  className="th-mono inline-flex items-center gap-2 rounded-sm bg-[var(--th-ink)] px-4 py-2 text-xs tracking-wide text-[var(--th-paper)] uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] disabled:opacity-50"
++                >
++                  {interpreting ? (
++                    <>
++                      <Loader2 className="size-3.5 animate-spin" aria-hidden />
++                      Analyzing…
++                    </>
++                  ) : (
++                    <>
++                      <Sparkles className="size-3.5" aria-hidden />
++                      Get plain-language interpretation
++                    </>
++                  )}
++                </button>
++              )}
++            </div>
++
++            {interpretError && (
++              <p className="mt-4 rounded-sm border border-[var(--th-redline)]/30 bg-[var(--th-redline)]/5 p-4 text-sm text-[var(--th-redline)]">
++                {interpretError}
++              </p>
++            )}
++
++            {interpretation && (
++              <div className="th-paper-texture mt-4 rounded-sm border border-[var(--th-rule)] bg-[var(--th-paper-card)] p-6">
++                <p className="th-mono mb-3 text-[0.65rem] tracking-widest text-[var(--th-verdigris)] uppercase">
++                  In plain language
++                </p>
++                <div className="space-y-3 text-sm leading-relaxed whitespace-pre-wrap text-[var(--th-ink)]">
++                  {interpretation}
++                </div>
++                <p className="th-mono mt-4 text-[0.65rem] text-[var(--th-ink-faint)]">
++                  AI-generated from the bill&apos;s summary text &middot; verify against the
++                  full bill text above
++                </p>
++              </div>
++            )}
++          </div>
++
++          {/* Chat */}
++          <div className="mt-10 border-t border-[var(--th-rule)] pt-8">
++            <p className="th-mono mb-4 text-[0.7rem] tracking-[0.2em] text-[var(--th-ink-faint)] uppercase">
++              Ask a follow-up question
++            </p>
++
++            {chatMessages.length > 0 && (
++              <div className="mb-4 space-y-3">
++                {chatMessages.map((message) => (
++                  <div
++                    key={message.id}
++                    className={
++                      message.role === "user"
++                        ? "ml-auto max-w-[85%] rounded-sm bg-[var(--th-ink)] px-4 py-3 text-sm text-[var(--th-paper)]"
++                        : "mr-auto max-w-[85%] rounded-sm border border-[var(--th-rule)] bg-[var(--th-paper-card)] px-4 py-3 text-sm text-[var(--th-ink)]"
++                    }
++                  >
++                    {message.content}
++                  </div>
++                ))}
++                {chatSending && (
++                  <div className="mr-auto flex max-w-[85%] items-center gap-2 rounded-sm border border-[var(--th-rule)] bg-[var(--th-paper-card)] px-4 py-3 text-sm text-[var(--th-ink-faint)]">
++                    <Loader2 className="size-3.5 animate-spin" aria-hidden />
++                    Thinking…
++                  </div>
++                )}
++              </div>
++            )}
++
++            <div className="flex items-end gap-3">
++              <textarea
++                value={chatInput}
++                onChange={(event) => onChatInputChange(event.target.value)}
++                onKeyDown={onChatKeyDown}
++                placeholder="Ask anything about this bill…"
++                rows={2}
++                className="th-sans flex-1 resize-none rounded-sm border border-[var(--th-rule-strong)] bg-[var(--th-paper)] px-4 py-3 text-sm text-[var(--th-ink)] placeholder:text-[var(--th-ink-faint)] focus:border-[var(--th-verdigris)] focus:outline-none"
++              />
++              <button
++                onClick={onSendChat}
++                disabled={chatSending || !chatInput.trim()}
++                className="th-mono inline-flex items-center gap-2 rounded-sm bg-[var(--th-verdigris)] px-4 py-3 text-xs tracking-wide text-[var(--th-paper)] uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] disabled:opacity-50"
++              >
++                <Send className="size-3.5" aria-hidden />
++                Send
++              </button>
++            </div>
++          </div>
++        </>
++      )}
++    </div>
++  )
++}
+diff --git a/apps/web/app/fonts.ts b/apps/web/app/fonts.ts
+new file mode 100644
+index 0000000..1d8adc4
+--- /dev/null
++++ b/apps/web/app/fonts.ts
+@@ -0,0 +1,25 @@
++import { Newsreader, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google"
++
++// Shared across the landing page and /bills so the brand typography
++// (paper/ink civic-document system, see theme.css) stays identical
++// everywhere it's used.
++
++export const newsreader = Newsreader({
++  subsets: ["latin"],
++  variable: "--font-newsreader",
++  style: ["normal", "italic"],
++})
++
++export const plexSans = IBM_Plex_Sans({
++  subsets: ["latin"],
++  weight: ["400", "500", "600"],
++  variable: "--font-plex-sans",
++})
++
++export const plexMono = IBM_Plex_Mono({
++  subsets: ["latin"],
++  weight: ["400", "500"],
++  variable: "--font-plex-mono",
++})
++
++export const themeFontVariables = `${newsreader.variable} ${plexSans.variable} ${plexMono.variable}`
+diff --git a/apps/web/app/page.tsx b/apps/web/app/page.tsx
+index 702ae61..81403ad 100644
+--- a/apps/web/app/page.tsx
++++ b/apps/web/app/page.tsx
+@@ -1,5 +1,5 @@
+ import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs"
+-import { Newsreader, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google"
++import Link from "next/link"
+ import {
+   ArrowRight,
+   Bell,
+@@ -20,25 +20,8 @@ import {
+   Users,
+ } from "lucide-react"
+ 
+-import "./landing.css"
+-
+-const newsreader = Newsreader({
+-  subsets: ["latin"],
+-  variable: "--font-newsreader",
+-  style: ["normal", "italic"],
+-})
+-
+-const plexSans = IBM_Plex_Sans({
+-  subsets: ["latin"],
+-  weight: ["400", "500", "600"],
+-  variable: "--font-plex-sans",
+-})
+-
+-const plexMono = IBM_Plex_Mono({
+-  subsets: ["latin"],
+-  weight: ["400", "500"],
+-  variable: "--font-plex-mono",
+-})
++import "./theme.css"
++import { themeFontVariables } from "./fonts"
+ 
+ const tenets = [
+   {
+@@ -113,9 +96,7 @@ const capabilities = [
+ 
+ export default function Page() {
+   return (
+-    <div
+-      className={`th-page th-sans ${newsreader.variable} ${plexSans.variable} ${plexMono.variable}`}
+-    >
++    <div className={`th-page th-sans ${themeFontVariables}`}>
+       {/* Header */}
+       <header className="sticky top-0 z-40 border-b border-[var(--th-rule)] bg-[var(--th-paper)]/90 backdrop-blur">
+         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+@@ -127,6 +108,12 @@ export default function Page() {
+           </a>
+ 
+           <nav className="hidden items-center gap-8 md:flex">
++            <Link
++              href="/bills"
++              className="th-mono text-[0.7rem] tracking-widest text-[var(--th-ink-soft)] uppercase hover:text-[var(--th-ink)]"
++            >
++              Bills
++            </Link>
+             <a
+               href="#mission"
+               className="th-mono text-[0.7rem] tracking-widest text-[var(--th-ink-soft)] uppercase hover:text-[var(--th-ink)]"
+diff --git a/apps/web/app/landing.css b/apps/web/app/theme.css
+similarity index 89%
+rename from apps/web/app/landing.css
+rename to apps/web/app/theme.css
+index ae7bd82..cdb6776 100644
+--- a/apps/web/app/landing.css
++++ b/apps/web/app/theme.css
+@@ -1,6 +1,6 @@
+-/* Townhall.vote landing page — scoped design tokens.
+-   Scoped under .th-page so this never leaks into the app shell,
+-   dashboard, or Clerk's themed components. */
++/* Townhall.vote brand design tokens — shared by the landing page
++   and the /bills experience. Scoped under .th-page so this never
++   leaks into the app shell, dashboard, or Clerk's themed components. */
+ 
+ .th-page {
+   --th-paper: #f1efe4;
+diff --git a/apps/web/package.json b/apps/web/package.json
+index 7d17c65..82f3b2e 100644
+--- a/apps/web/package.json
++++ b/apps/web/package.json
+@@ -12,6 +12,7 @@
+     "typecheck": "tsc --noEmit"
+   },
+   "dependencies": {
++    "@anthropic-ai/sdk": "^0.115.0",
+     "@clerk/nextjs": "^7.5.20",
+     "@clerk/ui": "^1.25.5",
+     "@workspace/ui": "workspace:*",
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index dbe72bd..2f1df99 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -29,6 +29,9 @@ importers:
+ 
+   apps/web:
+     dependencies:
++      '@anthropic-ai/sdk':
++        specifier: ^0.115.0
++        version: 0.115.0(zod@4.4.3)
+       '@clerk/nextjs':
+         specifier: ^7.5.20
+         version: 7.5.20(next@16.2.6(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+@@ -209,6 +212,15 @@ packages:
+     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
+     engines: {node: '>=10'}
+ 
++  '@anthropic-ai/sdk@0.115.0':
++    resolution: {integrity: sha512-BJrFIVyjNuU8lfDyIJTvlRYzgQg+zEl78BxE7fq8esULsGz9IRQvGtW5spq3tydmtjQb/GFdooKGdGsetpx+lQ==}
++    hasBin: true
++    peerDependencies:
++      zod: ^3.25.0 || ^4.0.0
++    peerDependenciesMeta:
++      zod:
++        optional: true
++
+   '@babel/code-frame@7.29.7':
+     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
+     engines: {node: '>=6.9.0'}
+@@ -3420,6 +3432,10 @@ packages:
+   json-parse-even-better-errors@2.3.1:
+     resolution: {integrity: sha512-xyFwyhro/JEof6Ghe2iz2NcXoj2sloNsWr/XsERDK/oiPCfaNhl5ONfp+jQdAZRQQ0IJWNzH9zIZF7li91kh2w==}
+ 
++  json-schema-to-ts@3.1.1:
++    resolution: {integrity: sha512-+DWg8jCJG2TEnpy7kOm/7/AxaYoaRbjVB4LFZLySZlWn8exGs3A4OLJR966cVvU26N7X9TWxl+Jsw7dzAqKT6g==}
++    engines: {node: '>=16'}
++
+   json-schema-traverse@0.4.1:
+     resolution: {integrity: sha512-xbbCH5dCYU5T8LcEhhuh7HJ88HXuW3qsI3Y0zOZFKfZEHcpWiHU/Jxzk629Brsab/mMiHQti9wMP+845RPe3Vg==}
+ 
+@@ -4528,6 +4544,9 @@ packages:
+   tr46@0.0.3:
+     resolution: {integrity: sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==}
+ 
++  ts-algebra@2.0.0:
++    resolution: {integrity: sha512-FPAhNPFMrkwz76P7cdjdmiShwMynZYN6SgOujD1urY4oNm80Ou9oMdmbR45LotcKOXoy7wSmHkRFE6Mxbrhefw==}
++
+   ts-api-utils@2.5.0:
+     resolution: {integrity: sha512-OJ/ibxhPlqrMM0UiNHJ/0CKQkoKF243/AEmplt3qpRgkW8VG7IfOS41h7V8TjITqdByHzrjcS/2si+y4lIh8NA==}
+     engines: {node: '>=18.12'}
+@@ -4830,6 +4849,13 @@ snapshots:
+ 
+   '@alloc/quick-lru@5.2.0': {}
+ 
++  '@anthropic-ai/sdk@0.115.0(zod@4.4.3)':
++    dependencies:
++      json-schema-to-ts: 3.1.1
++      standardwebhooks: 1.0.0
++    optionalDependencies:
++      zod: 4.4.3
++
+   '@babel/code-frame@7.29.7':
+     dependencies:
+       '@babel/helper-validator-identifier': 7.29.7
+@@ -8282,6 +8308,11 @@ snapshots:
+ 
+   json-parse-even-better-errors@2.3.1: {}
+ 
++  json-schema-to-ts@3.1.1:
++    dependencies:
++      '@babel/runtime': 7.29.7
++      ts-algebra: 2.0.0
++
+   json-schema-traverse@0.4.1: {}
+ 
+   json-schema-traverse@1.0.0: {}
+@@ -9556,6 +9587,8 @@ snapshots:
+ 
+   tr46@0.0.3: {}
+ 
++  ts-algebra@2.0.0: {}
++
+   ts-api-utils@2.5.0(typescript@5.9.3):
+     dependencies:
+       typescript: 5.9.3
+diff --git a/turbo.json b/turbo.json
+index dd730d9..0e2de0a 100644
+--- a/turbo.json
++++ b/turbo.json
+@@ -5,7 +5,8 @@
+     "build": {
+       "dependsOn": ["^build"],
+       "inputs": ["$TURBO_DEFAULT$", ".env*"],
+-      "outputs": [".next/**", "!.next/cache/**"]
++      "outputs": [".next/**", "!.next/cache/**"],
++      "env": ["CONGRESS_API_KEY", "CLAUDE_API_KEY"]
+     },
+     "lint": {
+       "dependsOn": ["^lint"]
