@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 
 import "../theme.css"
+import { LlmMarkdown } from "../../components/llm-markdown"
 import { themeFontVariables } from "../fonts"
 
 interface LatestAction {
@@ -572,8 +573,8 @@ function BillDetailView({
                 <p className="th-mono mb-3 text-[0.65rem] tracking-widest text-[var(--th-verdigris)] uppercase">
                   In plain language
                 </p>
-                <div className="space-y-3 text-sm leading-relaxed whitespace-pre-wrap text-[var(--th-ink)]">
-                  {interpretation}
+                <div className="text-sm text-[var(--th-ink)]">
+                  <LlmMarkdown>{interpretation}</LlmMarkdown>
                 </div>
                 <p className="th-mono mt-4 text-[0.65rem] text-[var(--th-ink-faint)]">
                   AI-generated from the bill&apos;s summary text &middot; verify against the
@@ -600,7 +601,11 @@ function BillDetailView({
                         : "mr-auto max-w-[85%] rounded-sm border border-[var(--th-rule)] bg-[var(--th-paper-card)] px-4 py-3 text-sm text-[var(--th-ink)]"
                     }
                   >
-                    {message.content}
+                    {message.role === "assistant" ? (
+                      <LlmMarkdown>{message.content}</LlmMarkdown>
+                    ) : (
+                      message.content
+                    )}
                   </div>
                 ))}
                 {chatSending && (
