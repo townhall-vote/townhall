@@ -1,0 +1,153 @@
+.markdown {
+  min-width: 0;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4 {
+  margin: 1.25em 0 0.5em;
+  color: var(--th-ink);
+  font-family: var(--font-newsreader), ui-serif, Georgia, serif;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.markdown h1 {
+  font-size: 1.5em;
+}
+
+.markdown h2 {
+  font-size: 1.3em;
+}
+
+.markdown h3 {
+  font-size: 1.15em;
+}
+
+.markdown h4 {
+  font-size: 1em;
+}
+
+.markdown p,
+.markdown ul,
+.markdown ol,
+.markdown blockquote,
+.markdown pre,
+.markdown table,
+.markdown hr {
+  margin: 0.8em 0;
+}
+
+.markdown ul,
+.markdown ol {
+  padding-left: 1.5em;
+}
+
+.markdown ul {
+  list-style: disc;
+}
+
+.markdown ol {
+  list-style: decimal;
+}
+
+.markdown li {
+  padding-left: 0.2em;
+}
+
+.markdown li + li {
+  margin-top: 0.3em;
+}
+
+.markdown li::marker {
+  color: var(--th-verdigris);
+  font-weight: 600;
+}
+
+.markdown strong {
+  font-weight: 650;
+}
+
+.markdown a {
+  color: var(--th-verdigris-deep);
+  text-decoration: underline;
+  text-decoration-color: color-mix(
+    in oklab,
+    var(--th-verdigris) 55%,
+    transparent
+  );
+  text-underline-offset: 0.18em;
+}
+
+.markdown a:hover {
+  text-decoration-color: currentColor;
+}
+
+.markdown blockquote {
+  border-left: 3px solid var(--th-gold);
+  color: var(--th-ink-soft);
+  padding-left: 1em;
+}
+
+.markdown code {
+  border: 1px solid var(--th-rule);
+  border-radius: 0.2rem;
+  background: color-mix(in oklab, var(--th-paper-deep) 75%, transparent);
+  font-family: var(--font-plex-mono), ui-monospace, "SF Mono", monospace;
+  font-size: 0.88em;
+  padding: 0.1em 0.3em;
+}
+
+.markdown pre {
+  overflow-x: auto;
+  border-radius: 0.25rem;
+  background: var(--th-ink);
+  color: var(--th-paper);
+  padding: 1em;
+}
+
+.markdown pre code {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.markdown th,
+.markdown td {
+  border: 1px solid var(--th-rule-strong);
+  padding: 0.5em 0.7em;
+  text-align: left;
+}
+
+.markdown th {
+  background: var(--th-paper-deep);
+  font-weight: 650;
+}
+
+.markdown hr {
+  border: 0;
+  border-top: 1px solid var(--th-rule-strong);
+}
+
+.markdown input[type="checkbox"] {
+  margin-right: 0.4em;
+}
