@@ -1,6 +1,6 @@
-/* Townhall.vote landing page — scoped design tokens.
-   Scoped under .th-page so this never leaks into the app shell,
-   dashboard, or Clerk's themed components. */
+/* Townhall.vote brand design tokens — shared by the landing page
+   and the /bills experience. Scoped under .th-page so this never
+   leaks into the app shell, dashboard, or Clerk's themed components. */
 
 .th-page {
   --th-paper: #f1efe4;

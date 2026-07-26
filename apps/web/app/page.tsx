@@ -1,5 +1,5 @@
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs"
-import { Newsreader, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google"
+import Link from "next/link"
 import {
   ArrowRight,
   Bell,
@@ -20,25 +20,8 @@ import {
   Users,
 } from "lucide-react"
 
-import "./landing.css"
-
-const newsreader = Newsreader({
-  subsets: ["latin"],
-  variable: "--font-newsreader",
-  style: ["normal", "italic"],
-})
-
-const plexSans = IBM_Plex_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-plex-sans",
-})
-
-const plexMono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-plex-mono",
-})
+import "./theme.css"
+import { themeFontVariables } from "./fonts"
 
 const tenets = [
   {
@@ -113,9 +96,7 @@ const capabilities = [
 
 export default function Page() {
   return (
-    <div
-      className={`th-page th-sans ${newsreader.variable} ${plexSans.variable} ${plexMono.variable}`}
-    >
+    <div className={`th-page th-sans ${themeFontVariables}`}>
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-[var(--th-rule)] bg-[var(--th-paper)]/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
@@ -127,6 +108,12 @@ export default function Page() {
           </a>
 
           <nav className="hidden items-center gap-8 md:flex">
+            <Link
+              href="/bills"
+              className="th-mono text-[0.7rem] tracking-widest text-[var(--th-ink-soft)] uppercase hover:text-[var(--th-ink)]"
+            >
+              Bills
+            </Link>
             <a
               href="#mission"
               className="th-mono text-[0.7rem] tracking-widest text-[var(--th-ink-soft)] uppercase hover:text-[var(--th-ink)]"
