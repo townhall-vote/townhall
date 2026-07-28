@@ -3,6 +3,7 @@ import { ClerkProvider } from "@clerk/nextjs"
 import { shadcn } from "@clerk/ui/themes"
 
 import "@workspace/ui/globals.css"
+import { TooltipProvider } from "@workspace/ui/components/tooltip"
 import "./clerk.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { cn } from "@workspace/ui/lib/utils";
@@ -27,7 +28,9 @@ export default function RootLayout({
     >
       <body>
         <ClerkProvider appearance={{ theme: shadcn }}>
-          <ThemeProvider>{children}</ThemeProvider>
+          <ThemeProvider>
+            <TooltipProvider>{children}</TooltipProvider>
+          </ThemeProvider>
         </ClerkProvider>
       </body>
     </html>
