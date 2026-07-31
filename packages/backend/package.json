@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit -p convex"
   },
   "dependencies": {
+    "ai": "^7.0.37",
     "convex": "^1.35.1"
   },
   "devDependencies": {
