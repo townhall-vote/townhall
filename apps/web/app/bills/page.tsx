@@ -246,17 +246,17 @@ export default function BillsPage() {
             <span className="th-serif text-xl font-medium tracking-tight text-[var(--th-ink)]">
               Townhall
             </span>
-            <span className="th-mono text-xs text-[var(--th-verdigris)]">.vote</span>
+            <span className="th-mono text-xs text-[var(--th-verdigris-text)]">.vote</span>
           </Link>
           <div className="flex items-center gap-3">
             <Show when="signed-out">
               <SignInButton>
-                <button className="th-mono rounded-sm px-3 py-2 text-xs tracking-wide text-[var(--th-ink-soft)] uppercase transition-colors hover:text-[var(--th-ink)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris)] focus-visible:outline-none">
+                <button className="th-mono rounded-sm px-3 py-2 text-xs tracking-wide text-[var(--th-ink-soft)] uppercase transition-colors hover:text-[var(--th-ink)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris-text)] focus-visible:outline-none">
                   Sign in
                 </button>
               </SignInButton>
               <SignUpButton>
-                <button className="th-mono rounded-sm bg-[var(--th-verdigris)] px-4 py-2 text-xs tracking-wide text-[var(--th-paper)] uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris)] focus-visible:ring-offset-2 focus-visible:outline-none">
+                <button className="th-mono rounded-sm bg-[var(--th-verdigris)] px-4 py-2 text-xs tracking-wide text-white uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris-text)] focus-visible:ring-offset-2 focus-visible:outline-none">
                   Get early access
                 </button>
               </SignUpButton>
@@ -346,7 +346,7 @@ function BillsList({
             value={searchTerm}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Search by bill number or title…"
-            className="th-sans w-full rounded-sm border border-[var(--th-rule-strong)] bg-[var(--th-paper)] py-3 pr-4 pl-10 text-sm text-[var(--th-ink)] placeholder:text-[var(--th-ink-faint)] focus:border-[var(--th-verdigris)] focus:outline-none"
+            className="th-sans w-full rounded-sm border border-[var(--th-rule-strong)] bg-[var(--th-paper)] py-3 pr-4 pl-10 text-sm text-[var(--th-ink)] placeholder:text-[var(--th-ink-faint)] focus:border-[var(--th-verdigris-text)] focus:outline-none"
           />
         </div>
         <button
@@ -391,7 +391,7 @@ function BillsList({
               onClick={() => onSelect(bill)}
               className="grid w-full grid-cols-1 gap-1 py-5 text-left transition-colors hover:bg-[var(--th-paper-card)]/60 sm:grid-cols-[8rem_1fr_9rem] sm:items-center sm:gap-4 sm:px-2"
             >
-              <span className="th-mono text-sm text-[var(--th-verdigris)]">
+              <span className="th-mono text-sm text-[var(--th-verdigris-text)]">
                 {bill.type} {bill.number}
               </span>
               <span className="th-serif text-base text-[var(--th-ink)]">
@@ -522,7 +522,7 @@ function BillDetailView({
                     href={format.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="th-mono inline-flex items-center gap-1.5 rounded-sm bg-[var(--th-verdigris)] px-3 py-2 text-[0.7rem] tracking-wide text-[var(--th-paper)] uppercase transition-colors hover:bg-[var(--th-verdigris-deep)]"
+                    className="th-mono inline-flex items-center gap-1.5 rounded-sm bg-[var(--th-verdigris)] px-3 py-2 text-[0.7rem] tracking-wide text-white uppercase transition-colors hover:bg-[var(--th-verdigris-deep)]"
                   >
                     {format.type}
                     <ExternalLink className="size-3" aria-hidden />
@@ -570,7 +570,7 @@ function BillDetailView({
 
             {interpretation && (
               <div className="th-paper-texture mt-4 rounded-sm border border-[var(--th-rule)] bg-[var(--th-paper-card)] p-6">
-                <p className="th-mono mb-3 text-[0.65rem] tracking-widest text-[var(--th-verdigris)] uppercase">
+                <p className="th-mono mb-3 text-[0.65rem] tracking-widest text-[var(--th-verdigris-text)] uppercase">
                   In plain language
                 </p>
                 <div className="text-sm text-[var(--th-ink)]">
@@ -624,12 +624,12 @@ function BillDetailView({
                 onKeyDown={onChatKeyDown}
                 placeholder="Ask anything about this bill…"
                 rows={2}
-                className="th-sans flex-1 resize-none rounded-sm border border-[var(--th-rule-strong)] bg-[var(--th-paper)] px-4 py-3 text-sm text-[var(--th-ink)] placeholder:text-[var(--th-ink-faint)] focus:border-[var(--th-verdigris)] focus:outline-none"
+                className="th-sans flex-1 resize-none rounded-sm border border-[var(--th-rule-strong)] bg-[var(--th-paper)] px-4 py-3 text-sm text-[var(--th-ink)] placeholder:text-[var(--th-ink-faint)] focus:border-[var(--th-verdigris-text)] focus:outline-none"
               />
               <button
                 onClick={onSendChat}
                 disabled={chatSending || !chatInput.trim()}
-                className="th-mono inline-flex items-center gap-2 rounded-sm bg-[var(--th-verdigris)] px-4 py-3 text-xs tracking-wide text-[var(--th-paper)] uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] disabled:opacity-50"
+                className="th-mono inline-flex items-center gap-2 rounded-sm bg-[var(--th-verdigris)] px-4 py-3 text-xs tracking-wide text-white uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] disabled:opacity-50"
               >
                 <Send className="size-3.5" aria-hidden />
                 Send

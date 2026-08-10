@@ -1,0 +1,261 @@
+diff --git a/apps/web/app/bills/page.tsx b/apps/web/app/bills/page.tsx
+index f791826..1b07544 100644
+--- a/apps/web/app/bills/page.tsx
++++ b/apps/web/app/bills/page.tsx
+@@ -246,17 +246,17 @@ export default function BillsPage() {
+             <span className="th-serif text-xl font-medium tracking-tight text-[var(--th-ink)]">
+               Townhall
+             </span>
+-            <span className="th-mono text-xs text-[var(--th-verdigris)]">.vote</span>
++            <span className="th-mono text-xs text-[var(--th-verdigris-text)]">.vote</span>
+           </Link>
+           <div className="flex items-center gap-3">
+             <Show when="signed-out">
+               <SignInButton>
+-                <button className="th-mono rounded-sm px-3 py-2 text-xs tracking-wide text-[var(--th-ink-soft)] uppercase transition-colors hover:text-[var(--th-ink)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris)] focus-visible:outline-none">
++                <button className="th-mono rounded-sm px-3 py-2 text-xs tracking-wide text-[var(--th-ink-soft)] uppercase transition-colors hover:text-[var(--th-ink)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris-text)] focus-visible:outline-none">
+                   Sign in
+                 </button>
+               </SignInButton>
+               <SignUpButton>
+-                <button className="th-mono rounded-sm bg-[var(--th-verdigris)] px-4 py-2 text-xs tracking-wide text-[var(--th-paper)] uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris)] focus-visible:ring-offset-2 focus-visible:outline-none">
++                <button className="th-mono rounded-sm bg-[var(--th-verdigris)] px-4 py-2 text-xs tracking-wide text-white uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris-text)] focus-visible:ring-offset-2 focus-visible:outline-none">
+                   Get early access
+                 </button>
+               </SignUpButton>
+@@ -346,7 +346,7 @@ function BillsList({
+             value={searchTerm}
+             onChange={(event) => onSearchChange(event.target.value)}
+             placeholder="Search by bill number or title…"
+-            className="th-sans w-full rounded-sm border border-[var(--th-rule-strong)] bg-[var(--th-paper)] py-3 pr-4 pl-10 text-sm text-[var(--th-ink)] placeholder:text-[var(--th-ink-faint)] focus:border-[var(--th-verdigris)] focus:outline-none"
++            className="th-sans w-full rounded-sm border border-[var(--th-rule-strong)] bg-[var(--th-paper)] py-3 pr-4 pl-10 text-sm text-[var(--th-ink)] placeholder:text-[var(--th-ink-faint)] focus:border-[var(--th-verdigris-text)] focus:outline-none"
+           />
+         </div>
+         <button
+@@ -391,7 +391,7 @@ function BillsList({
+               onClick={() => onSelect(bill)}
+               className="grid w-full grid-cols-1 gap-1 py-5 text-left transition-colors hover:bg-[var(--th-paper-card)]/60 sm:grid-cols-[8rem_1fr_9rem] sm:items-center sm:gap-4 sm:px-2"
+             >
+-              <span className="th-mono text-sm text-[var(--th-verdigris)]">
++              <span className="th-mono text-sm text-[var(--th-verdigris-text)]">
+                 {bill.type} {bill.number}
+               </span>
+               <span className="th-serif text-base text-[var(--th-ink)]">
+@@ -522,7 +522,7 @@ function BillDetailView({
+                     href={format.url}
+                     target="_blank"
+                     rel="noreferrer"
+-                    className="th-mono inline-flex items-center gap-1.5 rounded-sm bg-[var(--th-verdigris)] px-3 py-2 text-[0.7rem] tracking-wide text-[var(--th-paper)] uppercase transition-colors hover:bg-[var(--th-verdigris-deep)]"
++                    className="th-mono inline-flex items-center gap-1.5 rounded-sm bg-[var(--th-verdigris)] px-3 py-2 text-[0.7rem] tracking-wide text-white uppercase transition-colors hover:bg-[var(--th-verdigris-deep)]"
+                   >
+                     {format.type}
+                     <ExternalLink className="size-3" aria-hidden />
+@@ -570,7 +570,7 @@ function BillDetailView({
+ 
+             {interpretation && (
+               <div className="th-paper-texture mt-4 rounded-sm border border-[var(--th-rule)] bg-[var(--th-paper-card)] p-6">
+-                <p className="th-mono mb-3 text-[0.65rem] tracking-widest text-[var(--th-verdigris)] uppercase">
++                <p className="th-mono mb-3 text-[0.65rem] tracking-widest text-[var(--th-verdigris-text)] uppercase">
+                   In plain language
+                 </p>
+                 <div className="text-sm text-[var(--th-ink)]">
+@@ -624,12 +624,12 @@ function BillDetailView({
+                 onKeyDown={onChatKeyDown}
+                 placeholder="Ask anything about this bill…"
+                 rows={2}
+-                className="th-sans flex-1 resize-none rounded-sm border border-[var(--th-rule-strong)] bg-[var(--th-paper)] px-4 py-3 text-sm text-[var(--th-ink)] placeholder:text-[var(--th-ink-faint)] focus:border-[var(--th-verdigris)] focus:outline-none"
++                className="th-sans flex-1 resize-none rounded-sm border border-[var(--th-rule-strong)] bg-[var(--th-paper)] px-4 py-3 text-sm text-[var(--th-ink)] placeholder:text-[var(--th-ink-faint)] focus:border-[var(--th-verdigris-text)] focus:outline-none"
+               />
+               <button
+                 onClick={onSendChat}
+                 disabled={chatSending || !chatInput.trim()}
+-                className="th-mono inline-flex items-center gap-2 rounded-sm bg-[var(--th-verdigris)] px-4 py-3 text-xs tracking-wide text-[var(--th-paper)] uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] disabled:opacity-50"
++                className="th-mono inline-flex items-center gap-2 rounded-sm bg-[var(--th-verdigris)] px-4 py-3 text-xs tracking-wide text-white uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] disabled:opacity-50"
+               >
+                 <Send className="size-3.5" aria-hidden />
+                 Send
+diff --git a/apps/web/app/page.tsx b/apps/web/app/page.tsx
+index 81403ad..94ae6fa 100644
+--- a/apps/web/app/page.tsx
++++ b/apps/web/app/page.tsx
+@@ -104,7 +104,7 @@ export default function Page() {
+             <span className="th-serif text-xl font-medium tracking-tight text-[var(--th-ink)]">
+               Townhall
+             </span>
+-            <span className="th-mono text-xs text-[var(--th-verdigris)]">.vote</span>
++            <span className="th-mono text-xs text-[var(--th-verdigris-text)]">.vote</span>
+           </a>
+ 
+           <nav className="hidden items-center gap-8 md:flex">
+@@ -137,12 +137,12 @@ export default function Page() {
+           <div className="flex items-center gap-3">
+             <Show when="signed-out">
+               <SignInButton>
+-                <button className="th-mono rounded-sm px-3 py-2 text-xs tracking-wide text-[var(--th-ink-soft)] uppercase transition-colors hover:text-[var(--th-ink)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris)] focus-visible:outline-none">
++                <button className="th-mono rounded-sm px-3 py-2 text-xs tracking-wide text-[var(--th-ink-soft)] uppercase transition-colors hover:text-[var(--th-ink)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris-text)] focus-visible:outline-none">
+                   Sign in
+                 </button>
+               </SignInButton>
+               <SignUpButton>
+-                <button className="th-mono rounded-sm bg-[var(--th-verdigris)] px-4 py-2 text-xs tracking-wide text-[var(--th-paper)] uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris)] focus-visible:ring-offset-2 focus-visible:outline-none">
++                <button className="th-mono rounded-sm bg-[var(--th-verdigris)] px-4 py-2 text-xs tracking-wide text-white uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris-text)] focus-visible:ring-offset-2 focus-visible:outline-none">
+                   Get early access
+                 </button>
+               </SignUpButton>
+@@ -172,7 +172,7 @@ export default function Page() {
+           <div className="mt-8 flex flex-wrap items-center gap-4">
+             <Show when="signed-out">
+               <SignUpButton>
+-                <button className="th-mono group inline-flex items-center gap-2 rounded-sm bg-[var(--th-ink)] px-5 py-3 text-xs tracking-wide text-[var(--th-paper)] uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris)] focus-visible:ring-offset-2 focus-visible:outline-none">
++                <button className="th-mono group inline-flex items-center gap-2 rounded-sm bg-[var(--th-ink)] px-5 py-3 text-xs tracking-wide text-[var(--th-paper)] uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris-text)] focus-visible:ring-offset-2 focus-visible:outline-none">
+                   Get early access
+                   <ArrowRight
+                     className="size-3.5 transition-transform group-hover:translate-x-0.5"
+@@ -183,7 +183,7 @@ export default function Page() {
+             </Show>
+             <a
+               href="#mission"
+-              className="th-mono rounded-sm border border-[var(--th-rule-strong)] px-5 py-3 text-xs tracking-wide text-[var(--th-ink)] uppercase transition-colors hover:border-[var(--th-ink)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris)] focus-visible:outline-none"
++              className="th-mono rounded-sm border border-[var(--th-rule-strong)] px-5 py-3 text-xs tracking-wide text-[var(--th-ink)] uppercase transition-colors hover:border-[var(--th-ink)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris-text)] focus-visible:outline-none"
+             >
+               Read the mission
+             </a>
+@@ -198,7 +198,7 @@ export default function Page() {
+           <div className="th-paper-texture rounded-sm border border-[var(--th-rule)] bg-[var(--th-paper-card)] p-6 shadow-[0_1px_0_var(--th-rule)] md:p-10">
+             <div className="th-mono mb-6 flex flex-wrap items-center justify-between gap-2 text-[0.65rem] tracking-widest text-[var(--th-ink-faint)] uppercase">
+               <span>H.R. 4021 &middot; Sec. 3(b), excerpt</span>
+-              <span className="text-[var(--th-verdigris)]">As Townhall shows it</span>
++              <span className="text-[var(--th-verdigris-text)]">As Townhall shows it</span>
+             </div>
+ 
+             <div className="grid gap-8 md:grid-cols-2 md:gap-12">
+@@ -229,7 +229,7 @@ export default function Page() {
+               </div>
+ 
+               <div>
+-                <p className="th-mono mb-3 text-[0.65rem] tracking-widest text-[var(--th-verdigris)] uppercase">
++                <p className="th-mono mb-3 text-[0.65rem] tracking-widest text-[var(--th-verdigris-text)] uppercase">
+                   In plain language
+                 </p>
+                 <p
+@@ -256,7 +256,7 @@ export default function Page() {
+         <section id="mission" className="border-t border-[var(--th-rule)]">
+           <div className="mx-auto max-w-6xl px-6 py-20 md:py-28">
+             <div className="grid gap-8 md:grid-cols-[auto_1fr] md:gap-14">
+-              <div className="th-serif text-5xl text-[var(--th-verdigris)] md:text-6xl">
++              <div className="th-serif text-5xl text-[var(--th-verdigris-text)] md:text-6xl">
+                 &sect;1
+               </div>
+               <div className="max-w-2xl">
+@@ -291,7 +291,7 @@ export default function Page() {
+         <section className="border-t border-[var(--th-rule)] bg-[var(--th-paper-deep)]">
+           <div className="mx-auto max-w-6xl px-6 py-20 md:py-28">
+             <div className="grid gap-8 md:grid-cols-[auto_1fr] md:gap-14">
+-              <div className="th-serif text-5xl text-[var(--th-verdigris)] md:text-6xl">
++              <div className="th-serif text-5xl text-[var(--th-verdigris-text)] md:text-6xl">
+                 &sect;2
+               </div>
+               <div>
+@@ -328,7 +328,7 @@ export default function Page() {
+         >
+           <div className="mx-auto max-w-6xl px-6 py-20 md:py-28">
+             <div className="grid gap-8 md:grid-cols-[auto_1fr] md:gap-14">
+-              <div className="th-serif text-5xl text-[var(--th-verdigris)] md:text-6xl">
++              <div className="th-serif text-5xl text-[var(--th-verdigris-text)] md:text-6xl">
+                 &sect;3
+               </div>
+               <div>
+@@ -342,7 +342,7 @@ export default function Page() {
+                       <div key={group.title} className="bg-[var(--th-paper)] p-7">
+                         <div className="mb-5 flex items-center gap-2.5">
+                           <GroupIcon
+-                            className="size-4 text-[var(--th-verdigris)]"
++                            className="size-4 text-[var(--th-verdigris-text)]"
+                             aria-hidden
+                           />
+                           <h3 className="th-serif text-xl text-[var(--th-ink)]">
+@@ -429,7 +429,7 @@ export default function Page() {
+             <div className="mt-8">
+               <Show when="signed-out">
+                 <SignUpButton>
+-                  <button className="th-mono inline-flex items-center gap-2 rounded-sm bg-[var(--th-verdigris)] px-6 py-3 text-xs tracking-wide text-[var(--th-paper)] uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris)] focus-visible:ring-offset-2 focus-visible:outline-none">
++                  <button className="th-mono inline-flex items-center gap-2 rounded-sm bg-[var(--th-verdigris)] px-6 py-3 text-xs tracking-wide text-white uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris-text)] focus-visible:ring-offset-2 focus-visible:outline-none">
+                     Get early access
+                     <ArrowRight className="size-3.5" aria-hidden />
+                   </button>
+@@ -450,7 +450,7 @@ export default function Page() {
+         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 px-6 py-10 md:flex-row">
+           <div className="flex items-baseline gap-1.5">
+             <span className="th-serif text-base text-[var(--th-ink)]">Townhall</span>
+-            <span className="th-mono text-xs text-[var(--th-verdigris)]">.vote</span>
++            <span className="th-mono text-xs text-[var(--th-verdigris-text)]">.vote</span>
+           </div>
+           <a
+             href="https://github.com/townhall-vote/townhall"
+diff --git a/apps/web/app/theme.css b/apps/web/app/theme.css
+index cdb6776..6aa7667 100644
+--- a/apps/web/app/theme.css
++++ b/apps/web/app/theme.css
+@@ -3,18 +3,23 @@
+    leaks into the app shell, dashboard, or Clerk's themed components. */
+ 
+ .th-page {
+-  --th-paper: #f1efe4;
+-  --th-paper-deep: #e8e3d2;
+-  --th-paper-card: #e9e4d5;
+-  --th-ink: #171d19;
+-  --th-ink-soft: #4b5750;
+-  --th-ink-faint: #7c8579;
+-  --th-verdigris: #3e6c5c;
+-  --th-verdigris-deep: #2a4a3f;
+-  --th-gold: #a5793a;
+-  --th-redline: #a23b2e;
+-  --th-rule: #cdc6ac;
+-  --th-rule-strong: #b8ae8d;
++  /* DEM AI brand palette: black / blue / red / white. */
++  --th-paper: #000000;
++  --th-paper-deep: #0a0a0a;
++  --th-paper-card: #141414;
++  --th-ink: #ffffff;
++  --th-ink-soft: #c4c4c4;
++  --th-ink-faint: #8a8a8a;
++  --th-verdigris: #004aad;
++  --th-verdigris-deep: #00306e;
++  /* Same blue, brightened for use as text/rings/borders on black —
++     #004aad only hits ~2.6:1 contrast on black (fails WCAG AA even at
++     large sizes); this tint holds ~6:1 while staying the same hue. */
++  --th-verdigris-text: #4a8ce0;
++  --th-gold: #ff3131;
++  --th-redline: #ff3131;
++  --th-rule: #262626;
++  --th-rule-strong: #404040;
+ 
+   background-color: var(--th-paper);
+   color: var(--th-ink);
+diff --git a/apps/web/components/llm-markdown.module.css b/apps/web/components/llm-markdown.module.css
+index 3d00710..6212555 100644
+--- a/apps/web/components/llm-markdown.module.css
++++ b/apps/web/components/llm-markdown.module.css
+@@ -71,7 +71,7 @@
+ }
+ 
+ .markdown li::marker {
+-  color: var(--th-verdigris);
++  color: var(--th-verdigris-text);
+   font-weight: 600;
+ }
+ 
+@@ -80,11 +80,11 @@
+ }
+ 
+ .markdown a {
+-  color: var(--th-verdigris-deep);
++  color: var(--th-verdigris-text);
+   text-decoration: underline;
+   text-decoration-color: color-mix(
+     in oklab,
+-    var(--th-verdigris) 55%,
++    var(--th-verdigris-text) 55%,
+     transparent
+   );
+   text-underline-offset: 0.18em;

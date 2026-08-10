@@ -71,7 +71,7 @@
 }
 
 .markdown li::marker {
-  color: var(--th-verdigris);
+  color: var(--th-verdigris-text);
   font-weight: 600;
 }
 
@@ -80,11 +80,11 @@
 }
 
 .markdown a {
-  color: var(--th-verdigris-deep);
+  color: var(--th-verdigris-text);
   text-decoration: underline;
   text-decoration-color: color-mix(
     in oklab,
-    var(--th-verdigris) 55%,
+    var(--th-verdigris-text) 55%,
     transparent
   );
   text-underline-offset: 0.18em;
