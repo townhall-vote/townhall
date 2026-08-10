@@ -3,18 +3,23 @@
    leaks into the app shell, dashboard, or Clerk's themed components. */
 
 .th-page {
-  --th-paper: #f1efe4;
-  --th-paper-deep: #e8e3d2;
-  --th-paper-card: #e9e4d5;
-  --th-ink: #171d19;
-  --th-ink-soft: #4b5750;
-  --th-ink-faint: #7c8579;
-  --th-verdigris: #3e6c5c;
-  --th-verdigris-deep: #2a4a3f;
-  --th-gold: #a5793a;
-  --th-redline: #a23b2e;
-  --th-rule: #cdc6ac;
-  --th-rule-strong: #b8ae8d;
+  /* DEM AI brand palette: black / blue / red / white. */
+  --th-paper: #000000;
+  --th-paper-deep: #0a0a0a;
+  --th-paper-card: #141414;
+  --th-ink: #ffffff;
+  --th-ink-soft: #c4c4c4;
+  --th-ink-faint: #8a8a8a;
+  --th-verdigris: #004aad;
+  --th-verdigris-deep: #00306e;
+  /* Same blue, brightened for use as text/rings/borders on black —
+     #004aad only hits ~2.6:1 contrast on black (fails WCAG AA even at
+     large sizes); this tint holds ~6:1 while staying the same hue. */
+  --th-verdigris-text: #4a8ce0;
+  --th-gold: #ff3131;
+  --th-redline: #ff3131;
+  --th-rule: #262626;
+  --th-rule-strong: #404040;
 
   background-color: var(--th-paper);
   color: var(--th-ink);

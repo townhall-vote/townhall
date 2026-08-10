@@ -104,7 +104,7 @@ export default function Page() {
             <span className="th-serif text-xl font-medium tracking-tight text-[var(--th-ink)]">
               Townhall
             </span>
-            <span className="th-mono text-xs text-[var(--th-verdigris)]">.vote</span>
+            <span className="th-mono text-xs text-[var(--th-verdigris-text)]">.vote</span>
           </a>
 
           <nav className="hidden items-center gap-8 md:flex">
@@ -137,12 +137,12 @@ export default function Page() {
           <div className="flex items-center gap-3">
             <Show when="signed-out">
               <SignInButton>
-                <button className="th-mono rounded-sm px-3 py-2 text-xs tracking-wide text-[var(--th-ink-soft)] uppercase transition-colors hover:text-[var(--th-ink)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris)] focus-visible:outline-none">
+                <button className="th-mono rounded-sm px-3 py-2 text-xs tracking-wide text-[var(--th-ink-soft)] uppercase transition-colors hover:text-[var(--th-ink)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris-text)] focus-visible:outline-none">
                   Sign in
                 </button>
               </SignInButton>
               <SignUpButton>
-                <button className="th-mono rounded-sm bg-[var(--th-verdigris)] px-4 py-2 text-xs tracking-wide text-[var(--th-paper)] uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris)] focus-visible:ring-offset-2 focus-visible:outline-none">
+                <button className="th-mono rounded-sm bg-[var(--th-verdigris)] px-4 py-2 text-xs tracking-wide text-white uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris-text)] focus-visible:ring-offset-2 focus-visible:outline-none">
                   Get early access
                 </button>
               </SignUpButton>
@@ -172,7 +172,7 @@ export default function Page() {
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <Show when="signed-out">
               <SignUpButton>
-                <button className="th-mono group inline-flex items-center gap-2 rounded-sm bg-[var(--th-ink)] px-5 py-3 text-xs tracking-wide text-[var(--th-paper)] uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris)] focus-visible:ring-offset-2 focus-visible:outline-none">
+                <button className="th-mono group inline-flex items-center gap-2 rounded-sm bg-[var(--th-ink)] px-5 py-3 text-xs tracking-wide text-[var(--th-paper)] uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris-text)] focus-visible:ring-offset-2 focus-visible:outline-none">
                   Get early access
                   <ArrowRight
                     className="size-3.5 transition-transform group-hover:translate-x-0.5"
@@ -183,7 +183,7 @@ export default function Page() {
             </Show>
             <a
               href="#mission"
-              className="th-mono rounded-sm border border-[var(--th-rule-strong)] px-5 py-3 text-xs tracking-wide text-[var(--th-ink)] uppercase transition-colors hover:border-[var(--th-ink)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris)] focus-visible:outline-none"
+              className="th-mono rounded-sm border border-[var(--th-rule-strong)] px-5 py-3 text-xs tracking-wide text-[var(--th-ink)] uppercase transition-colors hover:border-[var(--th-ink)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris-text)] focus-visible:outline-none"
             >
               Read the mission
             </a>
@@ -198,7 +198,7 @@ export default function Page() {
           <div className="th-paper-texture rounded-sm border border-[var(--th-rule)] bg-[var(--th-paper-card)] p-6 shadow-[0_1px_0_var(--th-rule)] md:p-10">
             <div className="th-mono mb-6 flex flex-wrap items-center justify-between gap-2 text-[0.65rem] tracking-widest text-[var(--th-ink-faint)] uppercase">
               <span>H.R. 4021 &middot; Sec. 3(b), excerpt</span>
-              <span className="text-[var(--th-verdigris)]">As Townhall shows it</span>
+              <span className="text-[var(--th-verdigris-text)]">As Townhall shows it</span>
             </div>
 
             <div className="grid gap-8 md:grid-cols-2 md:gap-12">
@@ -229,7 +229,7 @@ export default function Page() {
               </div>
 
               <div>
-                <p className="th-mono mb-3 text-[0.65rem] tracking-widest text-[var(--th-verdigris)] uppercase">
+                <p className="th-mono mb-3 text-[0.65rem] tracking-widest text-[var(--th-verdigris-text)] uppercase">
                   In plain language
                 </p>
                 <p
@@ -256,7 +256,7 @@ export default function Page() {
         <section id="mission" className="border-t border-[var(--th-rule)]">
           <div className="mx-auto max-w-6xl px-6 py-20 md:py-28">
             <div className="grid gap-8 md:grid-cols-[auto_1fr] md:gap-14">
-              <div className="th-serif text-5xl text-[var(--th-verdigris)] md:text-6xl">
+              <div className="th-serif text-5xl text-[var(--th-verdigris-text)] md:text-6xl">
                 &sect;1
               </div>
               <div className="max-w-2xl">
@@ -291,7 +291,7 @@ export default function Page() {
         <section className="border-t border-[var(--th-rule)] bg-[var(--th-paper-deep)]">
           <div className="mx-auto max-w-6xl px-6 py-20 md:py-28">
             <div className="grid gap-8 md:grid-cols-[auto_1fr] md:gap-14">
-              <div className="th-serif text-5xl text-[var(--th-verdigris)] md:text-6xl">
+              <div className="th-serif text-5xl text-[var(--th-verdigris-text)] md:text-6xl">
                 &sect;2
               </div>
               <div>
@@ -328,7 +328,7 @@ export default function Page() {
         >
           <div className="mx-auto max-w-6xl px-6 py-20 md:py-28">
             <div className="grid gap-8 md:grid-cols-[auto_1fr] md:gap-14">
-              <div className="th-serif text-5xl text-[var(--th-verdigris)] md:text-6xl">
+              <div className="th-serif text-5xl text-[var(--th-verdigris-text)] md:text-6xl">
                 &sect;3
               </div>
               <div>
@@ -342,7 +342,7 @@ export default function Page() {
                       <div key={group.title} className="bg-[var(--th-paper)] p-7">
                         <div className="mb-5 flex items-center gap-2.5">
                           <GroupIcon
-                            className="size-4 text-[var(--th-verdigris)]"
+                            className="size-4 text-[var(--th-verdigris-text)]"
                             aria-hidden
                           />
                           <h3 className="th-serif text-xl text-[var(--th-ink)]">
@@ -429,7 +429,7 @@ export default function Page() {
             <div className="mt-8">
               <Show when="signed-out">
                 <SignUpButton>
-                  <button className="th-mono inline-flex items-center gap-2 rounded-sm bg-[var(--th-verdigris)] px-6 py-3 text-xs tracking-wide text-[var(--th-paper)] uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris)] focus-visible:ring-offset-2 focus-visible:outline-none">
+                  <button className="th-mono inline-flex items-center gap-2 rounded-sm bg-[var(--th-verdigris)] px-6 py-3 text-xs tracking-wide text-white uppercase transition-colors hover:bg-[var(--th-verdigris-deep)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris-text)] focus-visible:ring-offset-2 focus-visible:outline-none">
                     Get early access
                     <ArrowRight className="size-3.5" aria-hidden />
                   </button>
@@ -450,7 +450,7 @@ export default function Page() {
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 px-6 py-10 md:flex-row">
           <div className="flex items-baseline gap-1.5">
             <span className="th-serif text-base text-[var(--th-ink)]">Townhall</span>
-            <span className="th-mono text-xs text-[var(--th-verdigris)]">.vote</span>
+            <span className="th-mono text-xs text-[var(--th-verdigris-text)]">.vote</span>
           </div>
           <a
             href="https://github.com/townhall-vote/townhall"
