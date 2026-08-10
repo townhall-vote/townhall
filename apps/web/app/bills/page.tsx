@@ -3,6 +3,8 @@
 import { useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
 import Link from "next/link"
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs"
+import { useAction } from "convex/react"
+import { makeFunctionReference } from "convex/server"
 import {
   ArrowLeft,
   ExternalLink,
@@ -59,7 +61,21 @@ interface ChatMessage {
 
 type View = "list" | "detail"
 
+type InterpretBillArgs = {
+  billIdentifier: string
+  billTitle: string
+  billText: string
+}
+
+const interpretBillAction = makeFunctionReference<
+  "action",
+  InterpretBillArgs,
+  string
+>("interpretBill:interpret")
+
 export default function BillsPage() {
+  const runInterpretBill = useAction(interpretBillAction)
+
   const [bills, setBills] = useState<BillListItem[]>([])
   const [billsLoading, setBillsLoading] = useState(false)
   const [billsError, setBillsError] = useState<string | null>(null)
@@ -149,19 +165,12 @@ export default function BillsPage() {
     setInterpretError(null)
     try {
       const billContent = billDetail.summary?.text || billDetail.title || "No text available"
-      const response = await fetch("/api/interpret", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          billTitle: billDetail.title || "Untitled Bill",
-          billText: billContent,
-        }),
+      const interpretation = await runInterpretBill({
+        billIdentifier: `${billDetail.congress}/${billDetail.type.toLowerCase()}/${billDetail.number.replace(/\D/g, "")}`,
+        billTitle: billDetail.title || "Untitled Bill",
+        billText: billContent,
       })
-      const data = await response.json()
-      if (!response.ok) {
-        throw new Error(data.error ?? "Failed to interpret bill")
-      }
-      setInterpretation(data.interpretation)
+      setInterpretation(interpretation)
     } catch (error) {
       console.error("Error getting AI interpretation:", error)
       setInterpretError("Couldn't get an AI interpretation. Please try again.")
