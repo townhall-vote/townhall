@@ -1,0 +1,541 @@
+diff --git a/.gitignore b/.gitignore
+index f73eaea..b43d185 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -41,6 +41,9 @@ yarn-error.log*
+ # Clerk local project data
+ .clerk/
+ 
++# Convex generated types (created by `convex dev`, regenerated per-deployment)
++packages/backend/convex/_generated/
++
+ # vercel
+ .vercel
+ 
+diff --git a/README.md b/README.md
+index fc3c184..c0b39e7 100644
+--- a/README.md
++++ b/README.md
+@@ -50,6 +50,8 @@ corepack enable
+    Follow the Convex CLI prompts to sign in and create or select a development
+    deployment. In that deployment's Convex Dashboard, set the
+    `CLERK_JWT_ISSUER_DOMAIN` environment variable to your Clerk Frontend API URL.
++   Copy the deployment URL the CLI prints into `apps/web/.env.local` as
++   `NEXT_PUBLIC_CONVEX_URL`.
+ 
+ 4. Start the workspace:
+ 
+@@ -76,6 +78,9 @@ development instance:
+ | `CLERK_PUBLISHABLE_KEY`             | Yes      | Clerk publishable key for the web application.                                               |
+ | `CLERK_SECRET_KEY`                  | Yes      | Server-only Clerk secret key. Never expose or commit it.                                     |
+ | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes      | Public Clerk publishable key consumed by the browser. Use the same publishable key as above. |
++| `NEXT_PUBLIC_CONVEX_URL`            | Yes      | Convex deployment URL, printed by `pnpm --filter @townhall/backend setup`. Powers signed-in features like bookmarks. |
++| `CONGRESS_API_KEY`                  | Yes      | Congress.gov API key for `/bills`. Get a free key at https://api.congress.gov/sign-up/.      |
++| `AI_GATEWAY_API_KEY`                | Yes      | Vercel AI Gateway key, used for bill interpretation and follow-up chat on `/bills`.           |
+ 
+ ### `packages/backend/.env.local` and Convex
+ 
+diff --git a/apps/web/.env.example b/apps/web/.env.example
+index d9634c2..f8c195a 100644
+--- a/apps/web/.env.example
++++ b/apps/web/.env.example
+@@ -2,6 +2,11 @@ CLERK_PUBLISHABLE_KEY=
+ CLERK_SECRET_KEY=
+ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+ 
++# Convex deployment URL — printed by `pnpm --filter @townhall/backend dev`
++# the first time you run it. Needed for bookmarks (and any other
++# signed-in user data).
++NEXT_PUBLIC_CONVEX_URL=
++
+ # Bill search + AI interpretation (/bills) — ported from Democracy.AI
+ # Get a free key at https://api.congress.gov/sign-up/
+ CONGRESS_API_KEY=
+diff --git a/apps/web/app/bills/page.tsx b/apps/web/app/bills/page.tsx
+index 1b07544..2923308 100644
+--- a/apps/web/app/bills/page.tsx
++++ b/apps/web/app/bills/page.tsx
+@@ -3,8 +3,11 @@
+ import { useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
+ import Link from "next/link"
+ import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs"
++import { useMutation, useQuery } from "convex/react"
++import { api } from "@townhall/backend/convex/_generated/api"
+ import {
+   ArrowLeft,
++  Bookmark,
+   ExternalLink,
+   FileText,
+   Loader2,
+@@ -59,6 +62,10 @@ interface ChatMessage {
+ 
+ type View = "list" | "detail"
+ 
++function bookmarkKey(congress: number, billType: string, billNumber: string) {
++  return `${congress}-${billType}-${billNumber}`
++}
++
+ export default function BillsPage() {
+   const [bills, setBills] = useState<BillListItem[]>([])
+   const [billsLoading, setBillsLoading] = useState(false)
+@@ -67,6 +74,21 @@ export default function BillsPage() {
+ 
+   const [searchTerm, setSearchTerm] = useState("")
+   const [view, setView] = useState<View>("list")
++  const [bookmarkFilter, setBookmarkFilter] = useState<"all" | "bookmarked">("all")
++
++  const bookmarks = useQuery(api.bookmarks.list) as
++    | { congress: number; billType: string; billNumber: string }[]
++    | undefined
++  const toggleBookmark = useMutation(api.bookmarks.toggle)
++  const bookmarkedKeys = useMemo(
++    () =>
++      new Set(
++        (bookmarks ?? []).map((bookmark) =>
++          bookmarkKey(bookmark.congress, bookmark.billType, bookmark.billNumber),
++        ),
++      ),
++    [bookmarks],
++  )
+ 
+   const [billDetail, setBillDetail] = useState<BillDetail | null>(null)
+   const [detailLoading, setDetailLoading] = useState(false)
+@@ -102,13 +124,17 @@ export default function BillsPage() {
+ 
+   const filteredBills = useMemo(() => {
+     const term = searchTerm.toLowerCase().trim()
+-    if (term.length === 0) return bills
+     return bills.filter((bill) => {
+       const number = bill.number?.toLowerCase() ?? ""
+       const title = (bill.title ?? "").toLowerCase()
+-      return number.includes(term) || title.includes(term)
++      const matchesSearch =
++        term.length === 0 || number.includes(term) || title.includes(term)
++      const matchesBookmarkFilter =
++        bookmarkFilter === "all" ||
++        bookmarkedKeys.has(bookmarkKey(bill.congress, bill.type, bill.number))
++      return matchesSearch && matchesBookmarkFilter
+     })
+-  }, [bills, searchTerm])
++  }, [bills, searchTerm, bookmarkFilter, bookmarkedKeys])
+ 
+   async function openBill(bill: BillListItem) {
+     setView("detail")
+@@ -143,6 +169,19 @@ export default function BillsPage() {
+     setView("list")
+   }
+ 
++  async function handleToggleBookmark(bill: BillListItem) {
++    try {
++      await toggleBookmark({
++        congress: bill.congress,
++        billType: bill.type,
++        billNumber: bill.number,
++        title: bill.title,
++      })
++    } catch (error) {
++      console.error("Error toggling bookmark:", error)
++    }
++  }
++
+   async function interpretBill() {
+     if (!billDetail) return
+     setInterpreting(true)
+@@ -279,6 +318,10 @@ export default function BillsPage() {
+             onSearchSubmit={handleSearchSubmit}
+             onSelect={openBill}
+             onRefresh={loadBills}
++            bookmarkedKeys={bookmarkedKeys}
++            onToggleBookmark={handleToggleBookmark}
++            bookmarkFilter={bookmarkFilter}
++            onBookmarkFilterChange={setBookmarkFilter}
+           />
+         ) : (
+           <BillDetailView
+@@ -296,6 +339,14 @@ export default function BillsPage() {
+             onChatInputChange={setChatInput}
+             onChatKeyDown={handleChatKeyDown}
+             onSendChat={sendChatMessage}
++            isBookmarked={
++              billDetail
++                ? bookmarkedKeys.has(
++                    bookmarkKey(billDetail.congress, billDetail.type, billDetail.number),
++                  )
++                : false
++            }
++            onToggleBookmark={handleToggleBookmark}
+           />
+         )}
+       </main>
+@@ -312,6 +363,10 @@ function BillsList({
+   onSearchSubmit,
+   onSelect,
+   onRefresh,
++  bookmarkedKeys,
++  onToggleBookmark,
++  bookmarkFilter,
++  onBookmarkFilterChange,
+ }: {
+   bills: BillListItem[]
+   loading: boolean
+@@ -321,6 +376,10 @@ function BillsList({
+   onSearchSubmit: (event: FormEvent) => void
+   onSelect: (bill: BillListItem) => void
+   onRefresh: () => void
++  bookmarkedKeys: Set<string>
++  onToggleBookmark: (bill: BillListItem) => void
++  bookmarkFilter: "all" | "bookmarked"
++  onBookmarkFilterChange: (filter: "all" | "bookmarked") => void
+ }) {
+   return (
+     <div>
+@@ -359,10 +418,30 @@ function BillsList({
+         </button>
+       </form>
+ 
+-      <div className="th-mono mt-8 mb-3 text-[0.65rem] tracking-widest text-[var(--th-ink-faint)] uppercase">
+-        {loading
+-          ? "Loading bills…"
+-          : `${bills.length} bill${bills.length === 1 ? "" : "s"}`}
++      <div className="mt-8 mb-3 flex flex-wrap items-center justify-between gap-3">
++        <div className="th-mono text-[0.65rem] tracking-widest text-[var(--th-ink-faint)] uppercase">
++          {loading
++            ? "Loading bills…"
++            : `${bills.length} bill${bills.length === 1 ? "" : "s"}`}
++        </div>
++        <Show when="signed-in">
++          <div className="flex gap-2">
++            {(["all", "bookmarked"] as const).map((filter) => (
++              <button
++                key={filter}
++                type="button"
++                onClick={() => onBookmarkFilterChange(filter)}
++                className={
++                  bookmarkFilter === filter
++                    ? "th-mono rounded-full bg-[var(--th-ink)] px-3 py-1 text-[0.65rem] tracking-widest text-white uppercase"
++                    : "th-mono rounded-full border border-[var(--th-rule-strong)] px-3 py-1 text-[0.65rem] tracking-widest text-[var(--th-ink-soft)] uppercase hover:border-[var(--th-ink)]"
++                }
++              >
++                {filter === "all" ? "All" : "Bookmarked"}
++              </button>
++            ))}
++          </div>
++        </Show>
+       </div>
+ 
+       {error && (
+@@ -385,24 +464,43 @@ function BillsList({
+       )}
+ 
+       <ul className="divide-y divide-[var(--th-rule)] border-y border-[var(--th-rule)]">
+-        {bills.map((bill) => (
+-          <li key={`${bill.congress}-${bill.type}-${bill.number}`}>
+-            <button
+-              onClick={() => onSelect(bill)}
+-              className="grid w-full grid-cols-1 gap-1 py-5 text-left transition-colors hover:bg-[var(--th-paper-card)]/60 sm:grid-cols-[8rem_1fr_9rem] sm:items-center sm:gap-4 sm:px-2"
+-            >
+-              <span className="th-mono text-sm text-[var(--th-verdigris-text)]">
+-                {bill.type} {bill.number}
+-              </span>
+-              <span className="th-serif text-base text-[var(--th-ink)]">
+-                {bill.title || "No title available"}
+-              </span>
+-              <span className="th-mono text-[0.7rem] text-[var(--th-ink-faint)]">
+-                {bill.latestAction?.actionDate || "Unknown date"}
+-              </span>
+-            </button>
+-          </li>
+-        ))}
++        {bills.map((bill) => {
++          const bookmarked = bookmarkedKeys.has(
++            bookmarkKey(bill.congress, bill.type, bill.number),
++          )
++          return (
++            <li key={`${bill.congress}-${bill.type}-${bill.number}`} className="flex items-stretch">
++              <button
++                onClick={() => onSelect(bill)}
++                className="grid flex-1 grid-cols-1 gap-1 py-5 text-left transition-colors hover:bg-[var(--th-paper-card)]/60 sm:grid-cols-[8rem_1fr_9rem] sm:items-center sm:gap-4 sm:px-2"
++              >
++                <span className="th-mono text-sm text-[var(--th-verdigris-text)]">
++                  {bill.type} {bill.number}
++                </span>
++                <span className="th-serif text-base text-[var(--th-ink)]">
++                  {bill.title || "No title available"}
++                </span>
++                <span className="th-mono text-[0.7rem] text-[var(--th-ink-faint)]">
++                  {bill.latestAction?.actionDate || "Unknown date"}
++                </span>
++              </button>
++              <Show when="signed-in">
++                <button
++                  type="button"
++                  onClick={() => onToggleBookmark(bill)}
++                  aria-label={bookmarked ? "Remove bookmark" : "Bookmark this bill"}
++                  aria-pressed={bookmarked}
++                  className="flex shrink-0 items-center px-3 text-[var(--th-ink-faint)] transition-colors hover:text-[var(--th-verdigris-text)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris-text)] focus-visible:outline-none"
++                >
++                  <Bookmark
++                    className={bookmarked ? "size-4 fill-current text-[var(--th-verdigris-text)]" : "size-4"}
++                    aria-hidden
++                  />
++                </button>
++              </Show>
++            </li>
++          )
++        })}
+       </ul>
+     </div>
+   )
+@@ -423,6 +521,8 @@ function BillDetailView({
+   onChatInputChange,
+   onChatKeyDown,
+   onSendChat,
++  isBookmarked,
++  onToggleBookmark,
+ }: {
+   bill: BillDetail | null
+   loading: boolean
+@@ -438,6 +538,8 @@ function BillDetailView({
+   onChatInputChange: (value: string) => void
+   onChatKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void
+   onSendChat: () => void
++  isBookmarked: boolean
++  onToggleBookmark: (bill: BillListItem) => void
+ }) {
+   return (
+     <div>
+@@ -464,12 +566,31 @@ function BillDetailView({
+ 
+       {bill && !loading && (
+         <>
+-          <p className="th-mono mb-2 text-[0.7rem] tracking-[0.2em] text-[var(--th-gold)] uppercase">
+-            {bill.type} {bill.number}
+-          </p>
+-          <h1 className="th-serif text-2xl leading-snug text-[var(--th-ink)] md:text-3xl">
+-            {bill.title || "No title"}
+-          </h1>
++          <div className="flex items-start justify-between gap-4">
++            <div>
++              <p className="th-mono mb-2 text-[0.7rem] tracking-[0.2em] text-[var(--th-gold)] uppercase">
++                {bill.type} {bill.number}
++              </p>
++              <h1 className="th-serif text-2xl leading-snug text-[var(--th-ink)] md:text-3xl">
++                {bill.title || "No title"}
++              </h1>
++            </div>
++            <Show when="signed-in">
++              <button
++                type="button"
++                onClick={() => onToggleBookmark(bill)}
++                aria-label={isBookmarked ? "Remove bookmark" : "Bookmark this bill"}
++                aria-pressed={isBookmarked}
++                className="th-mono inline-flex shrink-0 items-center gap-2 rounded-sm border border-[var(--th-rule-strong)] px-3 py-2 text-[0.7rem] tracking-wide text-[var(--th-ink)] uppercase transition-colors hover:border-[var(--th-verdigris-text)] hover:text-[var(--th-verdigris-text)]"
++              >
++                <Bookmark
++                  className={isBookmarked ? "size-3.5 fill-current text-[var(--th-verdigris-text)]" : "size-3.5"}
++                  aria-hidden
++                />
++                {isBookmarked ? "Bookmarked" : "Bookmark"}
++              </button>
++            </Show>
++          </div>
+ 
+           <dl className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
+             <div>
+diff --git a/apps/web/app/layout.tsx b/apps/web/app/layout.tsx
+index 70b5e07..76520ce 100644
+--- a/apps/web/app/layout.tsx
++++ b/apps/web/app/layout.tsx
+@@ -6,6 +6,7 @@ import "@workspace/ui/globals.css"
+ import { TooltipProvider } from "@workspace/ui/components/tooltip"
+ import "./clerk.css"
+ import { ThemeProvider } from "@/components/theme-provider"
++import { ConvexClientProvider } from "@/components/convex-client-provider"
+ import { cn } from "@workspace/ui/lib/utils";
+ 
+ const geist = Geist({subsets:['latin'],variable:'--font-sans'})
+@@ -28,9 +29,11 @@ export default function RootLayout({
+     >
+       <body>
+         <ClerkProvider appearance={{ theme: shadcn }}>
+-          <ThemeProvider>
+-            <TooltipProvider>{children}</TooltipProvider>
+-          </ThemeProvider>
++          <ConvexClientProvider>
++            <ThemeProvider>
++              <TooltipProvider>{children}</TooltipProvider>
++            </ThemeProvider>
++          </ConvexClientProvider>
+         </ClerkProvider>
+       </body>
+     </html>
+diff --git a/apps/web/components/convex-client-provider.tsx b/apps/web/components/convex-client-provider.tsx
+new file mode 100644
+index 0000000..921629e
+--- /dev/null
++++ b/apps/web/components/convex-client-provider.tsx
+@@ -0,0 +1,27 @@
++"use client"
++
++import { useAuth } from "@clerk/nextjs"
++import { ConvexProviderWithClerk } from "convex/react-clerk"
++import { ConvexReactClient } from "convex/react"
++
++const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL
++
++if (!convexUrl) {
++  throw new Error(
++    "Missing NEXT_PUBLIC_CONVEX_URL. Copy it from `pnpm --filter @townhall/backend dev` output into apps/web/.env.local.",
++  )
++}
++
++const convex = new ConvexReactClient(convexUrl)
++
++export function ConvexClientProvider({
++  children,
++}: {
++  children: React.ReactNode
++}) {
++  return (
++    <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
++      {children}
++    </ConvexProviderWithClerk>
++  )
++}
+diff --git a/apps/web/package.json b/apps/web/package.json
+index db1e5a1..3a4ac43 100644
+--- a/apps/web/package.json
++++ b/apps/web/package.json
+@@ -14,8 +14,10 @@
+   "dependencies": {
+     "@clerk/nextjs": "^7.5.20",
+     "@clerk/ui": "^1.25.5",
++    "@townhall/backend": "workspace:*",
+     "@workspace/ui": "workspace:*",
+     "ai": "^7.0.37",
++    "convex": "^1.35.1",
+     "lucide-react": "^1.24.0",
+     "next": "16.2.6",
+     "next-themes": "^0.4.6",
+diff --git a/packages/backend/convex/bookmarks.ts b/packages/backend/convex/bookmarks.ts
+new file mode 100644
+index 0000000..054cd7a
+--- /dev/null
++++ b/packages/backend/convex/bookmarks.ts
+@@ -0,0 +1,60 @@
++import { mutation, query } from "./_generated/server"
++import { v } from "convex/values"
++
++// Returns the current user's bookmarks, or an empty list if signed out.
++// Reactive: the /bills page re-renders automatically as bookmarks change.
++export const list = query({
++  args: {},
++  handler: async (ctx) => {
++    const identity = await ctx.auth.getUserIdentity()
++    if (!identity) return []
++
++    return await ctx.db
++      .query("bookmarks")
++      .withIndex("by_user", (q) => q.eq("clerkUserId", identity.subject))
++      .collect()
++  },
++})
++
++// Adds a bookmark if one doesn't exist for this bill, or removes it if it
++// does. Returns the resulting state so the caller can update its UI without
++// waiting on the next reactive update.
++export const toggle = mutation({
++  args: {
++    congress: v.number(),
++    billType: v.string(),
++    billNumber: v.string(),
++    title: v.optional(v.string()),
++  },
++  handler: async (ctx, args) => {
++    const identity = await ctx.auth.getUserIdentity()
++    if (!identity) {
++      throw new Error("Sign in to bookmark bills.")
++    }
++
++    const existing = await ctx.db
++      .query("bookmarks")
++      .withIndex("by_user_and_bill", (q) =>
++        q
++          .eq("clerkUserId", identity.subject)
++          .eq("congress", args.congress)
++          .eq("billType", args.billType)
++          .eq("billNumber", args.billNumber),
++      )
++      .unique()
++
++    if (existing) {
++      await ctx.db.delete(existing._id)
++      return { bookmarked: false }
++    }
++
++    await ctx.db.insert("bookmarks", {
++      clerkUserId: identity.subject,
++      congress: args.congress,
++      billType: args.billType,
++      billNumber: args.billNumber,
++      title: args.title,
++    })
++    return { bookmarked: true }
++  },
++})
+diff --git a/packages/backend/convex/schema.ts b/packages/backend/convex/schema.ts
+index bea5c46..05302f5 100644
+--- a/packages/backend/convex/schema.ts
++++ b/packages/backend/convex/schema.ts
+@@ -5,4 +5,15 @@ export default defineSchema({
+   users: defineTable({
+     clerkUserId: v.string(),
+   }).index("by_clerkUserId", ["clerkUserId"]),
++
++  bookmarks: defineTable({
++    clerkUserId: v.string(),
++    congress: v.number(),
++    billType: v.string(),
++    billNumber: v.string(),
++    title: v.optional(v.string()),
++  })
++    .index("by_user", ["clerkUserId"])
++    .index("by_user_and_bill", ["clerkUserId", "congress", "billType", "billNumber"]),
+ })
++
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index e222c37..9a12536 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -35,12 +35,18 @@ importers:
+       '@clerk/ui':
+         specifier: ^1.25.5
+         version: 1.25.5(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@types/react@19.2.15)(bs58@6.0.0)(bufferutil@4.1.0)(react-dom@19.2.4(react@19.2.4))(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.15)(bufferutil@4.1.0)(react@19.2.4)(utf-8-validate@6.0.6))(react@19.2.4)(typescript@5.9.3)(utf-8-validate@6.0.6)
++      '@townhall/backend':
++        specifier: workspace:*
++        version: link:../../packages/backend
+       '@workspace/ui':
+         specifier: workspace:*
+         version: link:../../packages/ui
+       ai:
+         specifier: ^7.0.37
+         version: 7.0.37(zod@4.4.3)
++      convex:
++        specifier: ^1.35.1
++        version: 1.42.3(@clerk/react@6.12.5(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(bufferutil@4.1.0)(react@19.2.4)(utf-8-validate@6.0.6)
+       lucide-react:
+         specifier: ^1.24.0
+         version: 1.24.0(react@19.2.4)
+diff --git a/turbo.json b/turbo.json
+index c9a83e2..bf1e102 100644
+--- a/turbo.json
++++ b/turbo.json
+@@ -6,7 +6,7 @@
+       "dependsOn": ["^build"],
+       "inputs": ["$TURBO_DEFAULT$", ".env*"],
+       "outputs": [".next/**", "!.next/cache/**"],
+-      "env": ["CONGRESS_API_KEY", "AI_GATEWAY_API_KEY"]
++      "env": ["CONGRESS_API_KEY", "AI_GATEWAY_API_KEY", "NEXT_PUBLIC_CONVEX_URL"]
+     },
+     "lint": {
+       "dependsOn": ["^lint"]

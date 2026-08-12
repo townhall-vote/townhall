@@ -41,6 +41,9 @@ yarn-error.log*
 # Clerk local project data
 .clerk/
 
+# Convex generated types (created by `convex dev`, regenerated per-deployment)
+packages/backend/convex/_generated/
+
 # vercel
 .vercel
 

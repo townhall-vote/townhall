@@ -50,6 +50,8 @@ corepack enable
    Follow the Convex CLI prompts to sign in and create or select a development
    deployment. In that deployment's Convex Dashboard, set the
    `CLERK_JWT_ISSUER_DOMAIN` environment variable to your Clerk Frontend API URL.
+   Copy the deployment URL the CLI prints into `apps/web/.env.local` as
+   `NEXT_PUBLIC_CONVEX_URL`.
 
 4. Start the workspace:
 
@@ -76,6 +78,9 @@ development instance:
 | `CLERK_PUBLISHABLE_KEY`             | Yes      | Clerk publishable key for the web application.                                               |
 | `CLERK_SECRET_KEY`                  | Yes      | Server-only Clerk secret key. Never expose or commit it.                                     |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes      | Public Clerk publishable key consumed by the browser. Use the same publishable key as above. |
+| `NEXT_PUBLIC_CONVEX_URL`            | Yes      | Convex deployment URL, printed by `pnpm --filter @townhall/backend setup`. Powers signed-in features like bookmarks. |
+| `CONGRESS_API_KEY`                  | Yes      | Congress.gov API key for `/bills`. Get a free key at https://api.congress.gov/sign-up/.      |
+| `AI_GATEWAY_API_KEY`                | Yes      | Vercel AI Gateway key, used for bill interpretation and follow-up chat on `/bills`.           |
 
 ### `packages/backend/.env.local` and Convex
 
