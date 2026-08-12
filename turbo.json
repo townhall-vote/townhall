@@ -6,7 +6,7 @@
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**"],
-      "env": ["CONGRESS_API_KEY", "AI_GATEWAY_API_KEY"]
+      "env": ["CONGRESS_API_KEY", "AI_GATEWAY_API_KEY", "NEXT_PUBLIC_CONVEX_URL"]
     },
     "lint": {
       "dependsOn": ["^lint"]

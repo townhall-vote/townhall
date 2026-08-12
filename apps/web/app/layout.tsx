@@ -6,6 +6,7 @@ import "@workspace/ui/globals.css"
 import { TooltipProvider } from "@workspace/ui/components/tooltip"
 import "./clerk.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { ConvexClientProvider } from "@/components/convex-client-provider"
 import { cn } from "@workspace/ui/lib/utils";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'})
@@ -28,9 +29,11 @@ export default function RootLayout({
     >
       <body>
         <ClerkProvider appearance={{ theme: shadcn }}>
-          <ThemeProvider>
-            <TooltipProvider>{children}</TooltipProvider>
-          </ThemeProvider>
+          <ConvexClientProvider>
+            <ThemeProvider>
+              <TooltipProvider>{children}</TooltipProvider>
+            </ThemeProvider>
+          </ConvexClientProvider>
         </ClerkProvider>
       </body>
     </html>

@@ -3,8 +3,11 @@
 import { useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
 import Link from "next/link"
 import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs"
+import { useMutation, useQuery } from "convex/react"
+import { api } from "@townhall/backend/convex/_generated/api"
 import {
   ArrowLeft,
+  Bookmark,
   ExternalLink,
   FileText,
   Loader2,
@@ -59,6 +62,10 @@ interface ChatMessage {
 
 type View = "list" | "detail"
 
+function bookmarkKey(congress: number, billType: string, billNumber: string) {
+  return `${congress}-${billType}-${billNumber}`
+}
+
 export default function BillsPage() {
   const [bills, setBills] = useState<BillListItem[]>([])
   const [billsLoading, setBillsLoading] = useState(false)
@@ -67,6 +74,21 @@ export default function BillsPage() {
 
   const [searchTerm, setSearchTerm] = useState("")
   const [view, setView] = useState<View>("list")
+  const [bookmarkFilter, setBookmarkFilter] = useState<"all" | "bookmarked">("all")
+
+  const bookmarks = useQuery(api.bookmarks.list) as
+    | { congress: number; billType: string; billNumber: string }[]
+    | undefined
+  const toggleBookmark = useMutation(api.bookmarks.toggle)
+  const bookmarkedKeys = useMemo(
+    () =>
+      new Set(
+        (bookmarks ?? []).map((bookmark) =>
+          bookmarkKey(bookmark.congress, bookmark.billType, bookmark.billNumber),
+        ),
+      ),
+    [bookmarks],
+  )
 
   const [billDetail, setBillDetail] = useState<BillDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -102,13 +124,17 @@ export default function BillsPage() {
 
   const filteredBills = useMemo(() => {
     const term = searchTerm.toLowerCase().trim()
-    if (term.length === 0) return bills
     return bills.filter((bill) => {
       const number = bill.number?.toLowerCase() ?? ""
       const title = (bill.title ?? "").toLowerCase()
-      return number.includes(term) || title.includes(term)
+      const matchesSearch =
+        term.length === 0 || number.includes(term) || title.includes(term)
+      const matchesBookmarkFilter =
+        bookmarkFilter === "all" ||
+        bookmarkedKeys.has(bookmarkKey(bill.congress, bill.type, bill.number))
+      return matchesSearch && matchesBookmarkFilter
     })
-  }, [bills, searchTerm])
+  }, [bills, searchTerm, bookmarkFilter, bookmarkedKeys])
 
   async function openBill(bill: BillListItem) {
     setView("detail")
@@ -141,6 +167,19 @@ export default function BillsPage() {
 
   function backToList() {
     setView("list")
+  }
+
+  async function handleToggleBookmark(bill: BillListItem) {
+    try {
+      await toggleBookmark({
+        congress: bill.congress,
+        billType: bill.type,
+        billNumber: bill.number,
+        title: bill.title,
+      })
+    } catch (error) {
+      console.error("Error toggling bookmark:", error)
+    }
   }
 
   async function interpretBill() {
@@ -279,6 +318,10 @@ export default function BillsPage() {
             onSearchSubmit={handleSearchSubmit}
             onSelect={openBill}
             onRefresh={loadBills}
+            bookmarkedKeys={bookmarkedKeys}
+            onToggleBookmark={handleToggleBookmark}
+            bookmarkFilter={bookmarkFilter}
+            onBookmarkFilterChange={setBookmarkFilter}
           />
         ) : (
           <BillDetailView
@@ -296,6 +339,14 @@ export default function BillsPage() {
             onChatInputChange={setChatInput}
             onChatKeyDown={handleChatKeyDown}
             onSendChat={sendChatMessage}
+            isBookmarked={
+              billDetail
+                ? bookmarkedKeys.has(
+                    bookmarkKey(billDetail.congress, billDetail.type, billDetail.number),
+                  )
+                : false
+            }
+            onToggleBookmark={handleToggleBookmark}
           />
         )}
       </main>
@@ -312,6 +363,10 @@ function BillsList({
   onSearchSubmit,
   onSelect,
   onRefresh,
+  bookmarkedKeys,
+  onToggleBookmark,
+  bookmarkFilter,
+  onBookmarkFilterChange,
 }: {
   bills: BillListItem[]
   loading: boolean
@@ -321,6 +376,10 @@ function BillsList({
   onSearchSubmit: (event: FormEvent) => void
   onSelect: (bill: BillListItem) => void
   onRefresh: () => void
+  bookmarkedKeys: Set<string>
+  onToggleBookmark: (bill: BillListItem) => void
+  bookmarkFilter: "all" | "bookmarked"
+  onBookmarkFilterChange: (filter: "all" | "bookmarked") => void
 }) {
   return (
     <div>
@@ -359,10 +418,30 @@ function BillsList({
         </button>
       </form>
 
-      <div className="th-mono mt-8 mb-3 text-[0.65rem] tracking-widest text-[var(--th-ink-faint)] uppercase">
-        {loading
-          ? "Loading bills…"
-          : `${bills.length} bill${bills.length === 1 ? "" : "s"}`}
+      <div className="mt-8 mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="th-mono text-[0.65rem] tracking-widest text-[var(--th-ink-faint)] uppercase">
+          {loading
+            ? "Loading bills…"
+            : `${bills.length} bill${bills.length === 1 ? "" : "s"}`}
+        </div>
+        <Show when="signed-in">
+          <div className="flex gap-2">
+            {(["all", "bookmarked"] as const).map((filter) => (
+              <button
+                key={filter}
+                type="button"
+                onClick={() => onBookmarkFilterChange(filter)}
+                className={
+                  bookmarkFilter === filter
+                    ? "th-mono rounded-full bg-[var(--th-ink)] px-3 py-1 text-[0.65rem] tracking-widest text-white uppercase"
+                    : "th-mono rounded-full border border-[var(--th-rule-strong)] px-3 py-1 text-[0.65rem] tracking-widest text-[var(--th-ink-soft)] uppercase hover:border-[var(--th-ink)]"
+                }
+              >
+                {filter === "all" ? "All" : "Bookmarked"}
+              </button>
+            ))}
+          </div>
+        </Show>
       </div>
 
       {error && (
@@ -385,24 +464,43 @@ function BillsList({
       )}
 
       <ul className="divide-y divide-[var(--th-rule)] border-y border-[var(--th-rule)]">
-        {bills.map((bill) => (
-          <li key={`${bill.congress}-${bill.type}-${bill.number}`}>
-            <button
-              onClick={() => onSelect(bill)}
-              className="grid w-full grid-cols-1 gap-1 py-5 text-left transition-colors hover:bg-[var(--th-paper-card)]/60 sm:grid-cols-[8rem_1fr_9rem] sm:items-center sm:gap-4 sm:px-2"
-            >
-              <span className="th-mono text-sm text-[var(--th-verdigris-text)]">
-                {bill.type} {bill.number}
-              </span>
-              <span className="th-serif text-base text-[var(--th-ink)]">
-                {bill.title || "No title available"}
-              </span>
-              <span className="th-mono text-[0.7rem] text-[var(--th-ink-faint)]">
-                {bill.latestAction?.actionDate || "Unknown date"}
-              </span>
-            </button>
-          </li>
-        ))}
+        {bills.map((bill) => {
+          const bookmarked = bookmarkedKeys.has(
+            bookmarkKey(bill.congress, bill.type, bill.number),
+          )
+          return (
+            <li key={`${bill.congress}-${bill.type}-${bill.number}`} className="flex items-stretch">
+              <button
+                onClick={() => onSelect(bill)}
+                className="grid flex-1 grid-cols-1 gap-1 py-5 text-left transition-colors hover:bg-[var(--th-paper-card)]/60 sm:grid-cols-[8rem_1fr_9rem] sm:items-center sm:gap-4 sm:px-2"
+              >
+                <span className="th-mono text-sm text-[var(--th-verdigris-text)]">
+                  {bill.type} {bill.number}
+                </span>
+                <span className="th-serif text-base text-[var(--th-ink)]">
+                  {bill.title || "No title available"}
+                </span>
+                <span className="th-mono text-[0.7rem] text-[var(--th-ink-faint)]">
+                  {bill.latestAction?.actionDate || "Unknown date"}
+                </span>
+              </button>
+              <Show when="signed-in">
+                <button
+                  type="button"
+                  onClick={() => onToggleBookmark(bill)}
+                  aria-label={bookmarked ? "Remove bookmark" : "Bookmark this bill"}
+                  aria-pressed={bookmarked}
+                  className="flex shrink-0 items-center px-3 text-[var(--th-ink-faint)] transition-colors hover:text-[var(--th-verdigris-text)] focus-visible:ring-2 focus-visible:ring-[var(--th-verdigris-text)] focus-visible:outline-none"
+                >
+                  <Bookmark
+                    className={bookmarked ? "size-4 fill-current text-[var(--th-verdigris-text)]" : "size-4"}
+                    aria-hidden
+                  />
+                </button>
+              </Show>
+            </li>
+          )
+        })}
       </ul>
     </div>
   )
@@ -423,6 +521,8 @@ function BillDetailView({
   onChatInputChange,
   onChatKeyDown,
   onSendChat,
+  isBookmarked,
+  onToggleBookmark,
 }: {
   bill: BillDetail | null
   loading: boolean
@@ -438,6 +538,8 @@ function BillDetailView({
   onChatInputChange: (value: string) => void
   onChatKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void
   onSendChat: () => void
+  isBookmarked: boolean
+  onToggleBookmark: (bill: BillListItem) => void
 }) {
   return (
     <div>
@@ -464,12 +566,31 @@ function BillDetailView({
 
       {bill && !loading && (
         <>
-          <p className="th-mono mb-2 text-[0.7rem] tracking-[0.2em] text-[var(--th-gold)] uppercase">
-            {bill.type} {bill.number}
-          </p>
-          <h1 className="th-serif text-2xl leading-snug text-[var(--th-ink)] md:text-3xl">
-            {bill.title || "No title"}
-          </h1>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="th-mono mb-2 text-[0.7rem] tracking-[0.2em] text-[var(--th-gold)] uppercase">
+                {bill.type} {bill.number}
+              </p>
+              <h1 className="th-serif text-2xl leading-snug text-[var(--th-ink)] md:text-3xl">
+                {bill.title || "No title"}
+              </h1>
+            </div>
+            <Show when="signed-in">
+              <button
+                type="button"
+                onClick={() => onToggleBookmark(bill)}
+                aria-label={isBookmarked ? "Remove bookmark" : "Bookmark this bill"}
+                aria-pressed={isBookmarked}
+                className="th-mono inline-flex shrink-0 items-center gap-2 rounded-sm border border-[var(--th-rule-strong)] px-3 py-2 text-[0.7rem] tracking-wide text-[var(--th-ink)] uppercase transition-colors hover:border-[var(--th-verdigris-text)] hover:text-[var(--th-verdigris-text)]"
+              >
+                <Bookmark
+                  className={isBookmarked ? "size-3.5 fill-current text-[var(--th-verdigris-text)]" : "size-3.5"}
+                  aria-hidden
+                />
+                {isBookmarked ? "Bookmarked" : "Bookmark"}
+              </button>
+            </Show>
+          </div>
 
           <dl className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
             <div>
